@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # =============================================================================
-# build-qwenpaw-rootfs.sh
-# Build a vmsan-compatible ext4 rootfs image containing QwenPaw.
+# build.sh
+# Build a vmsan-compatible ext4 rootfs image.
 #
 # Usage:
-#   ./build-qwenpaw-rootfs.sh [OPTIONS]
+#   ./build.sh --image <name> [OPTIONS]
 #
 # Options:
-#   --qwenpaw-dir <path>    QwenPaw source directory (default: ../QwenPaw)
-#   --output <path>         Output ext4 image path (default: ./rootfs.ext4)
-#   --size <MB>             Minimum image size in MB (default: 2048)
-#   --tag <name>            Docker image tag (default: qwenpaw-rootfs:latest)
+#   --image <name>          Image name (must have images/<name>/ directory)
+#   --source-dir <path>     Override source directory (instead of git clone)
+#   --output <path>         Output ext4 image path (default from config)
+#   --size <MB>             Minimum image size in MB (default from config)
+#   --tag <name>            Docker image tag (default from config)
 #   --no-docker-cache       Pass --no-cache to docker build
 #   -h / --help             Show this help
 # =============================================================================
@@ -18,11 +19,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Defaults
-QWENPAW_DIR="$SCRIPT_DIR/../QwenPaw"
-OUTPUT="$SCRIPT_DIR/rootfs.ext4"
-MIN_SIZE_MB=2048
-IMAGE_TAG="qwenpaw-rootfs:latest"
+IMAGE_NAME=""
+SOURCE_DIR_OVERRIDE=""
+OUTPUT=""
+MIN_SIZE_MB=""
+IMAGE_TAG=""
 DOCKER_CACHE_FLAG=""
 
 usage() {
@@ -32,20 +33,37 @@ usage() {
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --qwenpaw-dir)  [ $# -ge 2 ] || { echo "--qwenpaw-dir requires a value" >&2; exit 1; }; QWENPAW_DIR="$2"; shift 2 ;;
-        --output)       [ $# -ge 2 ] || { echo "--output requires a value" >&2; exit 1; }; OUTPUT="$2"; shift 2 ;;
-        --size)         [ $# -ge 2 ] || { echo "--size requires a value" >&2; exit 1; }; MIN_SIZE_MB="$2"; shift 2 ;;
-        --tag)          [ $# -ge 2 ] || { echo "--tag requires a value" >&2; exit 1; }; IMAGE_TAG="$2"; shift 2 ;;
+        --image)         [ $# -ge 2 ] || { echo "--image requires a value" >&2; exit 1; }; IMAGE_NAME="$2"; shift 2 ;;
+        --source-dir)    [ $# -ge 2 ] || { echo "--source-dir requires a value" >&2; exit 1; }; SOURCE_DIR_OVERRIDE="$2"; shift 2 ;;
+        --output)        [ $# -ge 2 ] || { echo "--output requires a value" >&2; exit 1; }; OUTPUT="$2"; shift 2 ;;
+        --size)          [ $# -ge 2 ] || { echo "--size requires a value" >&2; exit 1; }; MIN_SIZE_MB="$2"; shift 2 ;;
+        --tag)           [ $# -ge 2 ] || { echo "--tag requires a value" >&2; exit 1; }; IMAGE_TAG="$2"; shift 2 ;;
         --no-docker-cache) DOCKER_CACHE_FLAG="--no-cache"; shift ;;
-        -h|--help)      usage ;;
-        *)              echo "Unknown argument: $1" >&2; exit 1 ;;
+        -h|--help)       usage ;;
+        *)               echo "Unknown argument: $1" >&2; exit 1 ;;
     esac
 done
 
-DOCKERFILE="$SCRIPT_DIR/Dockerfile"
-QWENPAW_DIR="$(cd "$QWENPAW_DIR" 2>/dev/null && pwd)" || {
-    echo "[error] QwenPaw directory not found: $QWENPAW_DIR" >&2; exit 1
-}
+[ -z "$IMAGE_NAME" ] && { echo "[error] --image is required" >&2; exit 1; }
+
+IMAGE_DIR="$SCRIPT_DIR/images/$IMAGE_NAME"
+[ -d "$IMAGE_DIR" ] || { echo "[error] Image directory not found: $IMAGE_DIR" >&2; exit 1; }
+
+DOCKERFILE="$IMAGE_DIR/Dockerfile"
+[ -f "$DOCKERFILE" ] || { echo "[error] Dockerfile not found: $DOCKERFILE" >&2; exit 1; }
+
+CONFIG_FILE="$IMAGE_DIR/config.sh"
+if [ -f "$CONFIG_FILE" ]; then
+    SOURCE_REPO=""
+    SOURCE_REF=""
+    source "$CONFIG_FILE"
+fi
+
+: "${SOURCE_REPO:=}"
+: "${SOURCE_REF:=main}"
+: "${MIN_SIZE_MB:=${IMAGE_SIZE:-2048}}"
+: "${IMAGE_TAG:=${TAG:-$IMAGE_NAME-rootfs:latest}}"
+: "${OUTPUT:=$SCRIPT_DIR/${OUTPUT_FILENAME:-$IMAGE_NAME-rootfs.ext4}}"
 
 info()  { printf '[info] %s\n' "$*"; }
 error() { printf '[error] %s\n' "$*" >&2; exit 1; }
@@ -58,24 +76,38 @@ need_cmd tune2fs
 need_cmd tar
 need_cmd stat
 
-[ -f "$DOCKERFILE" ] || error "Dockerfile not found: $DOCKERFILE"
-
 BUILD_DIR="$(mktemp -d)"
-CONTAINER_NAME="qwenpaw-export-$$"
+CONTAINER_NAME="${IMAGE_NAME}-export-$$"
+CLONE_DIR=""
 
 cleanup() {
     docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
     rm -rf "$BUILD_DIR"
+    [ -n "$CLONE_DIR" ] && rm -rf "$CLONE_DIR"
 }
 trap cleanup EXIT
 
-info "QwenPaw source : $QWENPAW_DIR"
-info "Dockerfile      : $DOCKERFILE"
-info "Output          : $OUTPUT"
-info "Min image size  : ${MIN_SIZE_MB}MB"
+if [ -n "$SOURCE_DIR_OVERRIDE" ]; then
+    SOURCE_DIR="$(cd "$SOURCE_DIR_OVERRIDE" 2>/dev/null && pwd)" || {
+        error "Source directory not found: $SOURCE_DIR_OVERRIDE"
+    }
+elif [ -n "$SOURCE_REPO" ]; then
+    CLONE_DIR="$(mktemp -d)"
+    info "Cloning source: $SOURCE_REPO @ $SOURCE_REF"
+    git clone --depth 1 --branch "$SOURCE_REF" "$SOURCE_REPO" "$CLONE_DIR"
+    SOURCE_DIR="$CLONE_DIR"
+else
+    error "No source specified. Provide --source-dir or set SOURCE_REPO in config.sh"
+fi
+
+info "Image          : $IMAGE_NAME"
+info "Source         : $SOURCE_DIR"
+info "Dockerfile     : $DOCKERFILE"
+info "Output         : $OUTPUT"
+info "Min image size : ${MIN_SIZE_MB}MB"
 
 info "Building Docker image: $IMAGE_TAG"
-docker build $DOCKER_CACHE_FLAG -t "$IMAGE_TAG" -f "$DOCKERFILE" "$QWENPAW_DIR"
+docker build $DOCKER_CACHE_FLAG -t "$IMAGE_TAG" -f "$DOCKERFILE" "$SOURCE_DIR"
 
 info "Exporting filesystem from Docker image"
 docker create --name "$CONTAINER_NAME" "$IMAGE_TAG" >/dev/null

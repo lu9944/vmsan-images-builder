@@ -1,0 +1,59 @@
+name: Build qwenpaw rootfs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'images/qwenpaw/**'
+      - 'build.sh'
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'QwenPaw git ref (branch/tag/commit)'
+        required: false
+        default: 'main'
+      image_size:
+        description: 'Minimum image size in MB'
+        required: false
+        default: '2048'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y e2fsprogs lftp
+
+      - name: Build rootfs image
+        run: |
+          chmod +x build.sh
+          ./build.sh \
+            --image qwenpaw \
+            --size "${{ github.event.inputs.image_size || '2048' }}" \
+            --no-docker-cache
+        env:
+          SOURCE_REF: ${{ github.event.inputs.source_ref || 'main' }}
+
+      - name: Generate filename
+        id: meta
+        run: |
+          TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+          echo "filename=qwenpaw-rootfs-${TIMESTAMP}.ext4" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to FTP
+        run: |
+          lftp -c "
+            set ftp:ssl-allow no;
+            open -p ${{ secrets.FTP_PORT }} \
+              -u '${{ secrets.FTP_USER }}','${{ secrets.FTP_PWD }}' \
+              ${{ secrets.FTP_HOST }};
+            mkdir -p qwenpaw;
+            cd qwenpaw;
+            put ./qwenpaw-rootfs.ext4 -o ${{ steps.meta.outputs.filename }};
+            bye
+          "
+        shell: bash

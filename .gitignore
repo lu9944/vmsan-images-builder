@@ -10,3 +10,5 @@
 .env
 .env.local
 .env.*.local
+.github_key
+.ftp
