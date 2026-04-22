@@ -127,8 +127,8 @@ IMAGE_SIZE_MB="$MIN_SIZE_MB"
 
 info "Creating ext4 image (${IMAGE_SIZE_MB}MB): $OUTPUT"
 rm -f "$OUTPUT"
-mkfs.ext4 -q -d "$BUILD_DIR/rootfs" "$OUTPUT" "${IMAGE_SIZE_MB}M"
-tune2fs -m 0 "$OUTPUT" >/dev/null 2>&1
+sudo mkfs.ext4 -q -d "$BUILD_DIR/rootfs" "$OUTPUT" "${IMAGE_SIZE_MB}M"
+sudo tune2fs -m 0 "$OUTPUT" >/dev/null 2>&1
 
 OUTPUT_BYTES="$(stat -c %s "$OUTPUT")"
 info "Done: $OUTPUT ($(( OUTPUT_BYTES / 1024 / 1024 ))MB)"
