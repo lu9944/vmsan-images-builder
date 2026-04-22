@@ -84,8 +84,8 @@ CLONE_DIR=""
 
 cleanup() {
     docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-    rm -rf "$BUILD_DIR"
-    [ -n "$CLONE_DIR" ] && rm -rf "$CLONE_DIR"
+    sudo rm -rf "$BUILD_DIR"
+    [ -n "$CLONE_DIR" ] && sudo rm -rf "$CLONE_DIR"
 }
 trap cleanup EXIT
 
