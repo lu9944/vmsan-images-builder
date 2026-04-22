@@ -132,3 +132,9 @@ tune2fs -m 0 "$OUTPUT" >/dev/null 2>&1
 
 OUTPUT_BYTES="$(stat -c %s "$OUTPUT")"
 info "Done: $OUTPUT ($(( OUTPUT_BYTES / 1024 / 1024 ))MB)"
+
+COMPRESSED="${OUTPUT}.gz"
+info "Compressing: $COMPRESSED"
+gzip -k -9 "$OUTPUT"
+COMPRESSED_BYTES="$(stat -c %s "$COMPRESSED")"
+info "Compressed: $COMPRESSED ($(( COMPRESSED_BYTES / 1024 / 1024 ))MB, $(( COMPRESSED_BYTES * 100 / OUTPUT_BYTES ))% of original)"
