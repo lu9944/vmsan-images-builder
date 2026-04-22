@@ -54,9 +54,11 @@ DOCKERFILE="$IMAGE_DIR/Dockerfile"
 
 CONFIG_FILE="$IMAGE_DIR/config.sh"
 if [ -f "$CONFIG_FILE" ]; then
-    SOURCE_REPO=""
-    SOURCE_REF=""
+    _ENV_REPO="${SOURCE_REPO:-}"
+    _ENV_REF="${SOURCE_REF:-}"
     source "$CONFIG_FILE"
+    [ -n "$_ENV_REPO" ] && SOURCE_REPO="$_ENV_REPO"
+    [ -n "$_ENV_REF" ] && SOURCE_REF="$_ENV_REF"
 fi
 
 : "${SOURCE_REPO:=}"
