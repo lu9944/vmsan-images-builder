@@ -117,7 +117,7 @@ docker export "$CONTAINER_NAME" -o "$BUILD_DIR/rootfs.tar" >/dev/null
 
 info "Extracting filesystem"
 mkdir -p "$BUILD_DIR/rootfs"
-tar -xf "$BUILD_DIR/rootfs.tar" -C "$BUILD_DIR/rootfs"
+sudo tar -xf "$BUILD_DIR/rootfs.tar" -C "$BUILD_DIR/rootfs"
 
 TAR_BYTES="$(stat -c %s "$BUILD_DIR/rootfs.tar")"
 CALC_MB=$(( TAR_BYTES / 1024 / 1024 + 512 ))
