@@ -23,7 +23,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG BUN_VERSION=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    systemd systemd-sysv sudo \
+    systemd systemd-sysv dbus sudo \
     curl unzip ca-certificates \
     bash git less openssh-client python3 nodejs npm \
     bind9-utils bzip2 findutils gzip iptables iputils-ping \
