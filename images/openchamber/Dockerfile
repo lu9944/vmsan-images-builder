@@ -87,7 +87,7 @@ Environment=OPENCHAMBER_HOST=0.0.0.0\n\
 Environment=OPENCHAMBER_PORT=3000\n\
 Environment=PATH=/home/openchamber/.npm-global/bin:/usr/local/bin:/usr/bin:/bin\n\
 ExecStartPre=/bin/sh -c "ssh-keygen -t ed25519 -N \"\" -f /home/openchamber/.ssh/id_ed25519 2>/dev/null || true"\n\
-ExecStart=/usr/bin/bun packages/web/bin/cli.js --port 3000\n\
+ExecStart=/usr/bin/bun packages/web/bin/cli.js --foreground --port 3000\n\
 Restart=always\n\
 RestartSec=5\n\
 WorkingDirectory=/home/openchamber\n\
