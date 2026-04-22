@@ -39,7 +39,7 @@ jobs:
           echo "Resolved latest release: $LATEST_TAG"
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y e2fsprogs lftp
+        run: sudo apt-get update && sudo apt-get install -y e2fsprogs
 
       - name: Build rootfs image
         run: |
@@ -68,25 +68,7 @@ jobs:
           name: "QwenPaw rootfs ${{ steps.meta.outputs.basename }}"
           body: |
             Built from QwenPaw `${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}`
-            - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip, < 2GB)
-            - **Raw**: `${{ steps.meta.outputs.ext4 }}` (on FTP)
+            - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
           files: ./qwenpaw-rootfs.ext4.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload to FTP & cleanup old images
-        run: |
-          lftp -c "
-            set ftp:ssl-allow no;
-            open -p ${{ secrets.FTP_PORT }} \
-              -u '${{ secrets.FTP_USER }}','${{ secrets.FTP_PWD }}' \
-              ${{ secrets.FTP_HOST }};
-            mkdir -p qwenpaw;
-            cd qwenpaw;
-            put ./qwenpaw-rootfs.ext4 -o ${{ steps.meta.outputs.ext4 }};
-            put ./qwenpaw-rootfs.ext4.gz -o ${{ steps.meta.outputs.gz }};
-            cls --sort=date *.ext4 | tail -n +4 | xargs -r -n1 rm -f;
-            cls --sort=date *.ext4.gz | tail -n +4 | xargs -r -n1 rm -f;
-            bye
-          "
-        shell: bash
