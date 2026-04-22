@@ -1,0 +1,12 @@
+*.ext4
+*.img
+*.log
+*~
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+.env
+.env.local
+.env.*.local
