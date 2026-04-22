@@ -9,13 +9,15 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: 'QwenPaw git ref (branch/tag/commit)'
+        description: 'QwenPaw git ref (branch/tag/commit). Leave empty to use latest release.'
         required: false
-        default: 'main'
+        default: ''
       image_size:
         description: 'Minimum image size in MB'
         required: false
         default: '2048'
+  schedule:
+    - cron: '0 2 * * *'
 
 jobs:
   build:
@@ -24,6 +26,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve latest QwenPaw release tag
+        id: resolve_ref
+        if: github.event.inputs.source_ref == ''
+        run: |
+          LATEST_TAG=$(curl -sf "https://api.github.com/repos/agentscope-ai/QwenPaw/releases/latest" | python3 -c "import json,sys;print(json.load(sys.stdin)['tag_name'])")
+          echo "ref=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved latest release: $LATEST_TAG"
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y e2fsprogs lftp
@@ -36,13 +46,14 @@ jobs:
             --size "${{ github.event.inputs.image_size || '2048' }}" \
             --no-docker-cache
         env:
-          SOURCE_REF: ${{ github.event.inputs.source_ref || 'main' }}
+          SOURCE_REF: ${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}
 
       - name: Generate filename
         id: meta
         run: |
           TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-          echo "filename=qwenpaw-rootfs-${TIMESTAMP}.ext4" >> "$GITHUB_OUTPUT"
+          REF="${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}"
+          echo "filename=qwenpaw-rootfs-${REF}-${TIMESTAMP}.ext4" >> "$GITHUB_OUTPUT"
 
       - name: Upload to FTP
         run: |
