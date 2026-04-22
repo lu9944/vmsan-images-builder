@@ -1,0 +1,74 @@
+name: Build openchamber rootfs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'images/openchamber/**'
+      - 'build.sh'
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'OpenChamber git ref (branch/tag/commit). Leave empty to use latest release.'
+        required: false
+        default: ''
+      image_size:
+        description: 'Minimum image size in MB'
+        required: false
+        default: '2048'
+  schedule:
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve latest OpenChamber release tag
+        id: resolve_ref
+        if: github.event.inputs.source_ref == ''
+        run: |
+          LATEST_TAG=$(curl -sf "https://api.github.com/repos/btriapitsyn/openchamber/releases/latest" | python3 -c "import json,sys;print(json.load(sys.stdin)['tag_name'])")
+          echo "ref=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved latest release: $LATEST_TAG"
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y e2fsprogs
+
+      - name: Build rootfs image
+        run: |
+          chmod +x build.sh
+          ./build.sh \
+            --image openchamber \
+            --size "${{ github.event.inputs.image_size || '2048' }}" \
+            --no-docker-cache
+        env:
+          SOURCE_REF: ${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}
+
+      - name: Generate filename
+        id: meta
+        run: |
+          TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+          REF="${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}"
+          BASENAME="openchamber-rootfs-${REF}-${TIMESTAMP}"
+          echo "basename=${BASENAME}" >> "$GITHUB_OUTPUT"
+          echo "ext4=${BASENAME}.ext4" >> "$GITHUB_OUTPUT"
+          echo "gz=${BASENAME}.ext4.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release & Upload
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.basename }}
+          name: "OpenChamber rootfs ${{ steps.meta.outputs.basename }}"
+          body: |
+            Built from OpenChamber `${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}`
+            - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
+          files: ./openchamber-rootfs.ext4.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
