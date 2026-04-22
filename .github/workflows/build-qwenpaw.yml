@@ -55,7 +55,7 @@ jobs:
           REF="${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}"
           echo "filename=qwenpaw-rootfs-${REF}-${TIMESTAMP}.ext4" >> "$GITHUB_OUTPUT"
 
-      - name: Upload to FTP
+      - name: Upload to FTP & cleanup old images
         run: |
           lftp -c "
             set ftp:ssl-allow no;
@@ -65,6 +65,7 @@ jobs:
             mkdir -p qwenpaw;
             cd qwenpaw;
             put ./qwenpaw-rootfs.ext4 -o ${{ steps.meta.outputs.filename }};
+            cls --sort=date qwenpaw-rootfs-*.ext4 | tail -n +4 | xargs -r -n1 rm -f;
             bye
           "
         shell: bash
