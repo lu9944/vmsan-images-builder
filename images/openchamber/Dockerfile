@@ -44,9 +44,8 @@ COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/
 
 WORKDIR /home/openchamber
 
-RUN userdel ubuntu 2>/dev/null; true \
-    && groupadd -g 1000 openchamber \
-    && useradd -u 1000 -g 1000 -m -s /bin/bash openchamber \
+RUN groupadd -g 1001 openchamber \
+    && useradd -u 1001 -g 1001 -m -s /bin/bash openchamber \
     && mkdir -p /home/openchamber/.local /home/openchamber/.config /home/openchamber/.ssh \
     && chown -R openchamber:openchamber /home/openchamber
 
