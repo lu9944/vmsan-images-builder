@@ -34,7 +34,7 @@ jobs:
         id: resolve_ref
         if: github.event.inputs.source_ref == ''
         run: |
-          LATEST_TAG=$(curl -sf "https://api.github.com/repos/btriapitsyn/openchamber/releases/latest" | python3 -c "import json,sys;print(json.load(sys.stdin)['tag_name'])")
+          LATEST_TAG=$(curl -sfL "https://api.github.com/repos/btriapitsyn/openchamber/releases/latest" | python3 -c "import json,sys;print(json.load(sys.stdin)['tag_name'])")
           echo "ref=$LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo "Resolved latest release: $LATEST_TAG"
 
