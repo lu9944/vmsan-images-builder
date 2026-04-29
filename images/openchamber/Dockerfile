@@ -12,6 +12,7 @@ COPY packages/vscode/package.json ./packages/vscode/
 RUN bun install --ignore-scripts
 
 COPY . .
+RUN sed -i "s/return DEFAULT_LOCALE;/return 'zh-CN';/" packages/ui/src/lib/i18n/runtime.ts
 RUN bun run build:web
 
 # =============================================================================

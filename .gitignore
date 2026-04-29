@@ -12,3 +12,5 @@
 .env.*.local
 .github_key
 .ftp
+openchamber-rootfs.ext4
+openchamber-rootfs.ext4.gz
