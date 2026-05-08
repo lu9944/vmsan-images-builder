@@ -119,6 +119,11 @@ info "Extracting filesystem"
 mkdir -p "$BUILD_DIR/rootfs"
 sudo tar -xf "$BUILD_DIR/rootfs.tar" -C "$BUILD_DIR/rootfs"
 
+if [ -f "$IMAGE_DIR/post-extract.sh" ]; then
+    info "Running post-extract hook"
+    sudo bash "$IMAGE_DIR/post-extract.sh" "$BUILD_DIR/rootfs"
+fi
+
 TAR_BYTES="$(stat -c %s "$BUILD_DIR/rootfs.tar")"
 CALC_MB=$(( TAR_BYTES / 1024 / 1024 + 512 ))
 [ "$CALC_MB" -lt 1024 ] && CALC_MB=1024
