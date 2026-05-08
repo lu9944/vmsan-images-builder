@@ -51,6 +51,8 @@ WORKDIR /home/openchamber
 
 RUN groupadd -g 1001 openchamber \
     && useradd -u 1001 -g 1001 -m -s /bin/bash openchamber \
+    && echo 'openchamber ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/openchamber \
+    && chmod 440 /etc/sudoers.d/openchamber \
     && mkdir -p /home/openchamber/.local /home/openchamber/.config /home/openchamber/.ssh \
     && chown -R openchamber:openchamber /home/openchamber
 
@@ -130,5 +132,10 @@ WantedBy=multi-user.target\n' "$OPENCODE_AUTH_PASSWORD" > /etc/systemd/system/op
        /etc/systemd/system/multi-user.target.wants/opencode.service \
     && ln -s /etc/systemd/system/openchamber.service \
        /etc/systemd/system/multi-user.target.wants/openchamber.service
+
+RUN rm -f /etc/resolv.conf \
+    && printf 'nameserver 223.5.5.5\nnameserver 10.0.10.10\n' > /etc/resolv.conf \
+    && systemctl disable systemd-resolved.service || true \
+    && chattr +i /etc/resolv.conf || true
 
 RUN rm -rf /tmp/*
