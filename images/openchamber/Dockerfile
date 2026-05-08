@@ -133,9 +133,9 @@ WantedBy=multi-user.target\n' "$OPENCODE_AUTH_PASSWORD" > /etc/systemd/system/op
     && ln -s /etc/systemd/system/openchamber.service \
        /etc/systemd/system/multi-user.target.wants/openchamber.service
 
-RUN rm -f /etc/resolv.conf \
-    && printf 'nameserver 223.5.5.5\nnameserver 10.0.10.10\n' > /etc/resolv.conf \
-    && systemctl disable systemd-resolved.service || true \
-    && chattr +i /etc/resolv.conf || true
+RUN rm -f /etc/systemd/system/multi-user.target.wants/systemd-resolved.service \
+    && ln -sf /dev/null /etc/systemd/system/systemd-resolved.service \
+    && rm -f /etc/resolv.conf \
+    && printf 'nameserver 223.5.5.5\nnameserver 10.0.10.10\n' > /etc/resolv.conf
 
 RUN rm -rf /tmp/*
