@@ -22,13 +22,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 
 RUN mkdir -p packages/web/public/fonts \
     && curl -fSL -o packages/web/public/fonts/JetBrainsMonoNerdFont-Regular.woff2 \
-       'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2' \
+       'https://github.com/mshaugh/nerdfont-webfonts/raw/v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2' \
     && curl -fSL -o packages/web/public/fonts/JetBrainsMonoNerdFont-Regular.woff \
-       'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff' \
+       'https://github.com/mshaugh/nerdfont-webfonts/raw/v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff' \
     && curl -fSL -o packages/web/public/fonts/FiraCodeNerdFont-Regular.woff2 \
-       'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2' \
+       'https://github.com/mshaugh/nerdfont-webfonts/raw/v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2' \
     && curl -fSL -o packages/web/public/fonts/FiraCodeNerdFont-Regular.woff \
-       'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff' \
+       'https://github.com/mshaugh/nerdfont-webfonts/raw/v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff' \
     && sed -i "s|https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/|/fonts/|g" packages/web/index.html
 
 RUN mkdir -p packages/web/public/fonts/npm \
