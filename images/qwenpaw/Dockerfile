@@ -58,7 +58,28 @@ RUN ln -sf /opt/qwenpaw-venv/bin/qwenpaw /usr/local/bin/qwenpaw \
 USER ubuntu
 ENV HOME=/home/ubuntu
 RUN /usr/local/bin/qwenpaw init --defaults --accept-security \
-    && printf '{"language":"zh"}' > /home/ubuntu/.qwenpaw/settings.json
+    && printf '{"language":"zh"}' > /home/ubuntu/.qwenpaw/settings.json \
+    && /opt/qwenpaw-venv/bin/python3 -c "
+import asyncio
+from qwenpaw.providers.provider_manager import ProviderManager
+from qwenpaw.providers.provider import ProviderInfo, ModelInfo
+
+mgr = ProviderManager()
+asyncio.run(mgr.add_custom_provider(ProviderInfo(
+    id='bitzh-vllm',
+    name='BITZH vLLM',
+    base_url='https://dify-beta.bitzh.edu.cn/v1',
+    api_key='sk-placeholder',
+    is_custom=True,
+    chat_model='OpenAIChatModel',
+)))
+asyncio.run(mgr.add_model_to_provider(
+    'bitzh-vllm',
+    ModelInfo(id='qwen3.5-27b', name='Qwen 3.5 27B'),
+))
+asyncio.run(mgr.activate_model('bitzh-vllm', 'qwen3.5-27b'))
+print('BITZH vLLM provider configured and activated')
+"
 USER root
 
 # Create systemd service for QwenPaw auto-start
