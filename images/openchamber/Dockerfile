@@ -17,6 +17,26 @@ RUN sed -i "s/return DEFAULT_LOCALE;/return 'zh-CN';/" packages/ui/src/lib/i18n/
     && sed -i 's/const FALLBACK_MODEL_ID = "big-pickle";/const FALLBACK_MODEL_ID = "qwen3.5-27b";/' packages/ui/src/stores/useConfigStore.ts \
     && sed -i 's/const GIT_UTILITY_PROVIDER_ID = "zen";/const GIT_UTILITY_PROVIDER_ID = "vllm-local";/' packages/ui/src/stores/useConfigStore.ts \
     && sed -i 's/const GIT_UTILITY_PREFERRED_MODEL_ID = "big-pickle";/const GIT_UTILITY_PREFERRED_MODEL_ID = "qwen3.5-27b";/' packages/ui/src/stores/useConfigStore.ts
+
+RUN mkdir -p packages/web/public/fonts \
+    && curl -fSL -o packages/web/public/fonts/JetBrainsMonoNerdFont-Regular.woff2 \
+       'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2' \
+    && curl -fSL -o packages/web/public/fonts/JetBrainsMonoNerdFont-Regular.woff \
+       'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff' \
+    && curl -fSL -o packages/web/public/fonts/FiraCodeNerdFont-Regular.woff2 \
+       'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2' \
+    && curl -fSL -o packages/web/public/fonts/FiraCodeNerdFont-Regular.woff \
+       'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff' \
+    && sed -i "s|https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/|/fonts/|g" packages/web/index.html
+
+RUN mkdir -p packages/web/public/fonts/npm \
+    && cd node_modules \
+    && for pkg in $(find . -path '*/@fontsource/*/files/*.woff2' -printf '%h\n' | sort -u | sed 's|^\./||'); do \
+         mkdir -p ../packages/web/public/fonts/npm/$pkg/files \
+         && cp $pkg/files/*.woff2 ../packages/web/public/fonts/npm/$pkg/files/ 2>/dev/null || true; \
+       done \
+    && cd .. \
+    && sed -i "s|https://cdn.jsdelivr.net/npm/|/fonts/npm/|g" packages/ui/src/lib/fontLoader.ts
 RUN bun run build:web
 
 # =============================================================================
