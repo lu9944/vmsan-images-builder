@@ -26,7 +26,8 @@ RUN mkdir -p packages/web/public/fonts \
     && curl -fSL -o packages/web/public/fonts/FiraCodeNerdFont-Regular.woff2 \
        'https://raw.githubusercontent.com/mshaugh/nerdfont-webfonts/v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2' \
     && sed -i "s|https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/|/fonts/|g" packages/web/index.html \
-    && sed -i '/\.woff.*) format.*woff/d' packages/web/index.html
+    && sed -i "/format('woff')/d" packages/web/index.html \
+    && sed -i "s|format('woff2'),$|format('woff2');|" packages/web/index.html
 
 RUN mkdir -p packages/web/public/fonts/npm \
     && cd node_modules \
