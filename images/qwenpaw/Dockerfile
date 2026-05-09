@@ -59,27 +59,11 @@ USER ubuntu
 ENV HOME=/home/ubuntu
 RUN /usr/local/bin/qwenpaw init --defaults --accept-security \
     && printf '{"language":"zh"}' > /home/ubuntu/.qwenpaw/settings.json \
-    && /opt/qwenpaw-venv/bin/python3 -c "
-import asyncio
-from qwenpaw.providers.provider_manager import ProviderManager
-from qwenpaw.providers.provider import ProviderInfo, ModelInfo
-
-mgr = ProviderManager()
-asyncio.run(mgr.add_custom_provider(ProviderInfo(
-    id='bitzh-vllm',
-    name='BITZH vLLM',
-    base_url='https://dify-beta.bitzh.edu.cn/v1',
-    api_key='sk-placeholder',
-    is_custom=True,
-    chat_model='OpenAIChatModel',
-)))
-asyncio.run(mgr.add_model_to_provider(
-    'bitzh-vllm',
-    ModelInfo(id='qwen3.5-27b', name='Qwen 3.5 27B'),
-))
-asyncio.run(mgr.activate_model('bitzh-vllm', 'qwen3.5-27b'))
-print('BITZH vLLM provider configured and activated')
-"
+    && mkdir -p /home/ubuntu/.qwenpaw.secret/providers/custom \
+    && printf '{"id":"bitzh-vllm","name":"BITZH vLLM","base_url":"https://dify-beta.bitzh.edu.cn/v1","api_key":"","chat_model":"OpenAIChatModel","models":[],"extra_models":[{"id":"qwen3.5-27b","name":"Qwen 3.5 27B"}],"api_key_prefix":"","is_local":false,"freeze_url":false,"require_api_key":false,"is_custom":true,"support_model_discovery":false,"support_connection_check":false,"generate_kwargs":{},"meta":{}}' \
+       > /home/ubuntu/.qwenpaw.secret/providers/custom/bitzh-vllm.json \
+    && printf '{"provider_id":"bitzh-vllm","model":"qwen3.5-27b"}' \
+       > /home/ubuntu/.qwenpaw.secret/providers/active_model.json
 USER root
 
 # Create systemd service for QwenPaw auto-start
