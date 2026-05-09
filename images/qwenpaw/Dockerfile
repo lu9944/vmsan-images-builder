@@ -57,7 +57,8 @@ RUN ln -sf /opt/qwenpaw-venv/bin/qwenpaw /usr/local/bin/qwenpaw \
 # Initialize QwenPaw config as ubuntu user
 USER ubuntu
 ENV HOME=/home/ubuntu
-RUN /usr/local/bin/qwenpaw init --defaults --accept-security
+RUN /usr/local/bin/qwenpaw init --defaults --accept-security \
+    && printf '{"language":"zh"}' > /home/ubuntu/.qwenpaw/settings.json
 USER root
 
 # Create systemd service for QwenPaw auto-start
