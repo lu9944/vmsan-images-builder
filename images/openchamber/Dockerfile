@@ -12,7 +12,11 @@ COPY packages/vscode/package.json ./packages/vscode/
 RUN bun install --ignore-scripts
 
 COPY . .
-RUN sed -i "s/return DEFAULT_LOCALE;/return 'zh-CN';/" packages/ui/src/lib/i18n/runtime.ts
+RUN sed -i "s/return DEFAULT_LOCALE;/return 'zh-CN';/" packages/ui/src/lib/i18n/runtime.ts \
+    && sed -i 's/const FALLBACK_PROVIDER_ID = "opencode";/const FALLBACK_PROVIDER_ID = "vllm-local";/' packages/ui/src/stores/useConfigStore.ts \
+    && sed -i 's/const FALLBACK_MODEL_ID = "big-pickle";/const FALLBACK_MODEL_ID = "qwen3.5-27b";/' packages/ui/src/stores/useConfigStore.ts \
+    && sed -i 's/const GIT_UTILITY_PROVIDER_ID = "zen";/const GIT_UTILITY_PROVIDER_ID = "vllm-local";/' packages/ui/src/stores/useConfigStore.ts \
+    && sed -i 's/const GIT_UTILITY_PREFERRED_MODEL_ID = "big-pickle";/const GIT_UTILITY_PREFERRED_MODEL_ID = "qwen3.5-27b";/' packages/ui/src/stores/useConfigStore.ts
 RUN bun run build:web
 
 # =============================================================================
