@@ -54,6 +54,8 @@ RUN groupadd -g 1001 openchamber \
     && echo 'openchamber ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/openchamber \
     && chmod 440 /etc/sudoers.d/openchamber \
     && mkdir -p /home/openchamber/.local /home/openchamber/.config /home/openchamber/.ssh \
+    && mkdir -p /home/openchamber/.config/opencode \
+    && printf '{"$schema":"https://opencode.ai/config.json","model":"vllm-local/qwen3.5-27b","small_model":"vllm-local/qwen3.5-27b","provider":{"vllm-local":{"api":"openai","options":{"baseURL":"https://dify-beta.bitzh.edu.cn/v1"},"models":{"qwen3-coder":{"id":"qwen3.5-27b","name":"qwen3.5-27b"}}}}}' > /home/openchamber/.config/opencode/opencode.json \
     && chown -R openchamber:openchamber /home/openchamber
 
 ENV NPM_CONFIG_PREFIX=/home/openchamber/.npm-global
