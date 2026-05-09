@@ -18,6 +18,8 @@ RUN sed -i "s/return DEFAULT_LOCALE;/return 'zh-CN';/" packages/ui/src/lib/i18n/
     && sed -i 's/const GIT_UTILITY_PROVIDER_ID = "zen";/const GIT_UTILITY_PROVIDER_ID = "vllm-local";/' packages/ui/src/stores/useConfigStore.ts \
     && sed -i 's/const GIT_UTILITY_PREFERRED_MODEL_ID = "big-pickle";/const GIT_UTILITY_PREFERRED_MODEL_ID = "qwen3.5-27b";/' packages/ui/src/stores/useConfigStore.ts
 
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 RUN mkdir -p packages/web/public/fonts \
     && curl -fSL -o packages/web/public/fonts/JetBrainsMonoNerdFont-Regular.woff2 \
        'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2' \
