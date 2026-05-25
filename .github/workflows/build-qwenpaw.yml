@@ -39,7 +39,12 @@ jobs:
           echo "Resolved latest release: $LATEST_TAG"
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y e2fsprogs
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y e2fsprogs && break
+            echo "Retry $i: apt-get failed, retrying in 10s..."
+            sleep 10
+          done
 
       - name: Build rootfs image
         run: |
