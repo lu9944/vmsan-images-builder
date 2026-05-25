@@ -51,6 +51,60 @@ jobs:
         env:
           SOURCE_REF: ${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}
 
+      - name: Install vmsan
+        run: curl -fsSL https://vmsan.dev/install | sudo bash
+
+      - name: Test VM boot with vmsan
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+
+          IMAGE="$(pwd)/qwenpaw-rootfs.ext4"
+          echo "=== Booting VM from $IMAGE ==="
+
+          VM_JSON=$(sudo env "PATH=$PATH" vmsan create \
+            --rootfs "$IMAGE" \
+            --memory 512 \
+            --vcpus 1 \
+            --json 2>&1) || {
+            echo "=== vmsan create failed ==="
+            echo "$VM_JSON"
+            exit 1
+          }
+
+          VM_ID=$(echo "$VM_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id',''))")
+          echo "VM ID: $VM_ID"
+
+          if [ -z "$VM_ID" ]; then
+            echo "ERROR: No VM ID returned"
+            exit 1
+          fi
+
+          echo "=== Checking VM status ==="
+          sleep 5
+          STATUS=$(vmsan list --json | python3 -c "
+          import json, sys
+          vms = json.load(sys.stdin)
+          vm = next((v for v in vms if v['id'] == '$VM_ID'), None)
+          print(vm['status'] if vm else 'not_found')
+          ")
+          echo "VM status: $STATUS"
+
+          if [ "$STATUS" != "running" ]; then
+            echo "ERROR: VM is not running (status=$STATUS)"
+            sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "=== Running command inside VM ==="
+          vmsan exec "$VM_ID" echo "VM is alive"
+
+          echo "=== Cleanup ==="
+          sudo env "PATH=$PATH" vmsan stop "$VM_ID"
+          sudo env "PATH=$PATH" vmsan remove "$VM_ID"
+
+          echo "=== VM test passed ==="
+
       - name: Generate filename
         id: meta
         run: |
