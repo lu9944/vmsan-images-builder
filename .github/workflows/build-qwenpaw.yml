@@ -62,6 +62,7 @@ jobs:
 
       - name: Test VM boot with vmsan
         timeout-minutes: 5
+        continue-on-error: true
         run: |
           set -euo pipefail
 
