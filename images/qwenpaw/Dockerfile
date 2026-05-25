@@ -8,6 +8,13 @@ ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY console/package.json console/package-lock.json ./
 RUN npm ci
 COPY console/ .
+
+# Patch: raise frontend skill zip upload limits from 100 MB to 512 MB
+RUN sed -i 's/MAX_UPLOAD_SIZE_MB = 100/MAX_UPLOAD_SIZE_MB = 512/' \
+    src/pages/Agent/Skills/useSkillsPage.tsx \
+    && sed -i 's/SKILL_POOL_ZIP_MAX_MB = 100/SKILL_POOL_ZIP_MAX_MB = 512/' \
+    src/pages/Settings/SkillPool/useSkillPool.tsx
+
 RUN git init && git config user.email "build@ci" && git config user.name "CI" && git add -A && git commit -m "build" --allow-empty
 RUN npm run build
 
