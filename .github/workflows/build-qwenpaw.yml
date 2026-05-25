@@ -60,38 +60,47 @@ jobs:
           set -euo pipefail
 
           IMAGE="$(pwd)/qwenpaw-rootfs.ext4"
-          echo "=== Booting VM from $IMAGE ==="
+          echo "=== Booting VM from $IMAGE ($(du -sh "$IMAGE" | cut -f1)) ==="
 
-          VM_JSON=$(sudo env "PATH=$PATH" vmsan create \
+          # vmsan create may output non-JSON progress to stderr; --json goes to stdout
+          VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
             --rootfs "$IMAGE" \
             --memory 512 \
             --vcpus 1 \
-            --json 2>&1) || {
-            echo "=== vmsan create failed ==="
-            echo "$VM_JSON"
-            exit 1
-          }
+            --json || true)
 
-          VM_ID=$(echo "$VM_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id',''))")
+          echo "=== vmsan create output ==="
+          echo "$VM_OUT"
+          echo "=== end output ==="
+
+          VM_ID=$(echo "$VM_OUT" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"')
           echo "VM ID: $VM_ID"
 
           if [ -z "$VM_ID" ]; then
-            echo "ERROR: No VM ID returned"
+            echo "ERROR: No VM ID returned from vmsan create"
             exit 1
           fi
 
-          echo "=== Checking VM status ==="
-          sleep 5
-          STATUS=$(vmsan list --json | python3 -c "
+          echo "=== Waiting for VM to boot ==="
+          for i in $(seq 1 12); do
+            sleep 5
+            STATUS=$(vmsan list --json | python3 -c "
           import json, sys
           vms = json.load(sys.stdin)
           vm = next((v for v in vms if v['id'] == '$VM_ID'), None)
           print(vm['status'] if vm else 'not_found')
-          ")
-          echo "VM status: $STATUS"
+          " || echo "parse_error")
+            echo "  attempt $i: status=$STATUS"
+            if [ "$STATUS" = "running" ]; then break; fi
+            if [ "$STATUS" = "error" ] || [ "$STATUS" = "stopped" ]; then
+              echo "ERROR: VM entered bad state: $STATUS"
+              sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
+              exit 1
+            fi
+          done
 
           if [ "$STATUS" != "running" ]; then
-            echo "ERROR: VM is not running (status=$STATUS)"
+            echo "ERROR: VM did not reach running state (status=$STATUS)"
             sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
             exit 1
           fi
