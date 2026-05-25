@@ -35,6 +35,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps tar unzip debianutils whois zstd \
     curl wget iproute2 iputils-ping iputils-tracepath netcat-openbsd \
     vim-tiny nano jq dnsutils tcpdump strace lsof less \
+    libglib2.0-0 libnss3 libnspr4 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+    libcups2t64 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+    libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 \
+    libxshmfence1 libdbus-1-3 libatspi2.0-0t64 libx11-xcb1 libxfixes3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create ubuntu user with passwordless sudo
