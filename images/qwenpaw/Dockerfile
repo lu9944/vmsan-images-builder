@@ -54,6 +54,9 @@ RUN python3 -m venv /opt/qwenpaw-venv \
     && /opt/qwenpaw-venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/qwenpaw-venv/bin/pip install --no-cache-dir .
 
+# Patch: FastAPI 0.103+ no longer bundles python-multipart (required for file uploads)
+RUN /opt/qwenpaw-venv/bin/pip install --no-cache-dir python-multipart
+
 # Make CLI available system-wide
 RUN ln -sf /opt/qwenpaw-venv/bin/qwenpaw /usr/local/bin/qwenpaw \
     && ln -sf /opt/qwenpaw-venv/bin/copaw /usr/local/bin/copaw
