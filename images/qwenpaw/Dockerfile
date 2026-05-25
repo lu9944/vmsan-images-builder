@@ -53,15 +53,11 @@ COPY src ./src
 COPY --from=console-builder /app/dist ./src/qwenpaw/console/
 
 # Patch: raise skill zip upload limit from 100 MB to 512 MB
-RUN sed -i 's/_MAX_UPLOAD_BYTES = 100 \* 1024 \* 1024/_MAX_UPLOAD_BYTES = 512 * 1024 * 1024/' \
+RUN sed -i '/^_MAX_UPLOAD_BYTES/s/= .*/= 512 * 1024 * 1024/' \
     src/qwenpaw/app/routers/skills.py
 
-# Patch: raise skill zip uncompressed size limit from 200 MB to 512 MB
-RUN sed -i 's/_MAX_ZIP_BYTES = 200 \* 1024 \* 1024/_MAX_ZIP_BYTES = 512 * 1024 * 1024/' \
-    src/qwenpaw/agents/skill_system/store.py
-
-# Patch: raise uncompressed zip content limit from 200 MB to 1 GB
-RUN sed -i 's/_MAX_ZIP_BYTES = 200 \* 1024 \* 1024/_MAX_ZIP_BYTES = 1024 * 1024 * 1024/' \
+# Patch: raise skill zip uncompressed size limit from 200 MB to 1 GB
+RUN sed -i '/^_MAX_ZIP_BYTES/s/= .*/= 1024 * 1024 * 1024/' \
     src/qwenpaw/agents/skill_system/store.py
 
 # Install QwenPaw in a virtual environment
