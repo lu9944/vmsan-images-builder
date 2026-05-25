@@ -49,6 +49,10 @@ COPY --from=console-builder /app/dist ./src/qwenpaw/console/
 RUN sed -i 's/_MAX_UPLOAD_BYTES = 100 \* 1024 \* 1024/_MAX_UPLOAD_BYTES = 512 * 1024 * 1024/' \
     src/qwenpaw/app/routers/skills.py
 
+# Patch: raise uncompressed zip content limit from 200 MB to 1 GB
+RUN sed -i 's/_MAX_ZIP_BYTES = 200 \* 1024 \* 1024/_MAX_ZIP_BYTES = 1024 * 1024 * 1024/' \
+    src/qwenpaw/agents/skill_system/store.py
+
 # Install QwenPaw in a virtual environment
 RUN python3 -m venv /opt/qwenpaw-venv \
     && /opt/qwenpaw-venv/bin/pip install --no-cache-dir --upgrade pip \
