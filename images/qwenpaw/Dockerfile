@@ -45,6 +45,10 @@ COPY pyproject.toml setup.py README.md ./
 COPY src ./src
 COPY --from=console-builder /app/dist ./src/qwenpaw/console/
 
+# Patch: raise skill zip upload limit from 100 MB to 512 MB
+RUN sed -i 's/_MAX_UPLOAD_BYTES = 100 \* 1024 \* 1024/_MAX_UPLOAD_BYTES = 512 * 1024 * 1024/' \
+    src/qwenpaw/app/routers/skills.py
+
 # Install QwenPaw in a virtual environment
 RUN python3 -m venv /opt/qwenpaw-venv \
     && /opt/qwenpaw-venv/bin/pip install --no-cache-dir --upgrade pip \
