@@ -41,6 +41,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxshmfence1 libdbus-1-3 libatspi2.0-0t64 libx11-xcb1 libxfixes3 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Rust toolchain (with Chinese mirrors)
+ENV RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static
+ENV RUSTUP_UPDATE_ROOT=https://mirrors.ustc.edu.cn/rust-static/rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
+    && echo 'source "$HOME/.cargo/env"' >> /etc/bash.bashrc \
+    && echo 'source "$HOME/.cargo/env"' >> /home/ubuntu/.bashrc \
+    && mkdir -p /root/.cargo \
+    && printf '[source.crates-io]\nreplace-with = "rsproxy"\n\n[source.rsproxy]\nregistry = "https://rsproxy.cn/crates.io-index"\n\n[registries.rsproxy]\nindex = "https://rsproxy.cn/crates.io-index"\n\n[net]\ngit-fetch-with-cli = true\n' > /root/.cargo/config.toml
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # Create ubuntu user with passwordless sudo
 RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
     && mkdir -p /etc/sudoers.d \
