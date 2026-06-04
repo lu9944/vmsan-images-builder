@@ -42,14 +42,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Rust toolchain (with Chinese mirrors)
+ENV RUSTUP_HOME=/opt/rust
+ENV CARGO_HOME=/opt/rust/cargo
 ENV RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static
 ENV RUSTUP_UPDATE_ROOT=https://mirrors.ustc.edu.cn/rust-static/rustup
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable \
-    && echo 'source "$HOME/.cargo/env"' >> /etc/bash.bashrc \
-    && echo 'source "$HOME/.cargo/env"' >> /home/ubuntu/.bashrc \
-    && mkdir -p /root/.cargo \
-    && printf '[source.crates-io]\nreplace-with = "rsproxy"\n\n[source.rsproxy]\nregistry = "https://rsproxy.cn/crates.io-index"\n\n[registries.rsproxy]\nindex = "https://rsproxy.cn/crates.io-index"\n\n[net]\ngit-fetch-with-cli = true\n' > /root/.cargo/config.toml
-ENV PATH="/root/.cargo/bin:${PATH}"
+    && printf '[source.crates-io]\nreplace-with = "rsproxy"\n\n[source.rsproxy]\nregistry = "https://rsproxy.cn/crates.io-index"\n\n[registries.rsproxy]\nindex = "https://rsproxy.cn/crates.io-index"\n\n[net]\ngit-fetch-with-cli = true\n' > /opt/rust/cargo/config.toml \
+    && chmod -R 755 /opt/rust
+ENV PATH="/opt/rust/cargo/bin:${PATH}"
 
 # Create ubuntu user with passwordless sudo
 RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
