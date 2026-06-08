@@ -9,6 +9,9 @@ jobs:
   test-kvm:
     runs-on: ubuntu-latest
     steps:
+      - name: Add runner to kvm group
+        run: sudo usermod -aG kvm runner
+
       - name: Check KVM device
         run: |
           echo "=== /dev/kvm ==="
