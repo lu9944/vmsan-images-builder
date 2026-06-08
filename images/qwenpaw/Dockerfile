@@ -2,14 +2,13 @@
 # Stage 1: Build QwenPaw frontend (Node.js)
 # =============================================================================
 FROM node:20-slim AS console-builder
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY console/package.json console/package-lock.json ./
 RUN npm ci
 COPY console/ .
 
-RUN git init && git config user.email "build@ci" && git config user.name "CI" && git add -A && git commit -m "build" --allow-empty
 RUN npm run build
 
 # =============================================================================
