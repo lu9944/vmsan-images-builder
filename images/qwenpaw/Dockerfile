@@ -9,12 +9,6 @@ COPY console/package.json console/package-lock.json ./
 RUN npm ci
 COPY console/ .
 
-# Patch: raise frontend skill zip upload limits from 100 MB to 512 MB
-RUN sed -i 's/MAX_UPLOAD_SIZE_MB = 100/MAX_UPLOAD_SIZE_MB = 512/' \
-    src/pages/Agent/Skills/useSkillsPage.tsx \
-    && sed -i 's/SKILL_POOL_ZIP_MAX_MB = 100/SKILL_POOL_ZIP_MAX_MB = 512/' \
-    src/pages/Settings/SkillPool/useSkillPool.tsx
-
 RUN git init && git config user.email "build@ci" && git config user.name "CI" && git add -A && git commit -m "build" --allow-empty
 RUN npm run build
 
@@ -66,10 +60,6 @@ COPY pyproject.toml setup.py README.md ./
 COPY src ./src
 COPY --from=console-builder /app/dist ./src/qwenpaw/console/
 
-# Patch: raise skill zip upload limit from 100 MB to 512 MB
-RUN sed -i '/^_MAX_UPLOAD_BYTES/s/= .*/= 512 * 1024 * 1024/' \
-    src/qwenpaw/app/routers/skills.py
-
 # Patch: raise skill zip uncompressed size limit from 200 MB to 1 GB
 RUN sed -i '/^_MAX_ZIP_BYTES/s/= .*/= 1024 * 1024 * 1024/' \
     src/qwenpaw/agents/skill_system/store.py
@@ -109,6 +99,7 @@ ExecStart=/usr/local/bin/qwenpaw app --host 0.0.0.0 --port 8088\n\
 Restart=always\n\
 RestartSec=5\n\
 Environment=HOME=/home/ubuntu\n\
+Environment=QWENPAW_UPLOAD_MAX_SIZE_MB=512\n\
 WorkingDirectory=/home/ubuntu\n\
 \n\
 [Install]\n\
