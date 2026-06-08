@@ -16,8 +16,8 @@ on:
         description: 'Minimum image size in MB'
         required: false
         default: '4096'
-  schedule:
-    - cron: '0 2 * * *'
+  # schedule:
+  #   - cron: '0 2 * * *'
 
 permissions:
   contents: write
