@@ -68,6 +68,23 @@ jobs:
             echo "SKIPPED: /dev/kvm does not exist"
           fi
 
+      - name: Check memory capacity
+        run: |
+          echo "=== Physical memory ==="
+          free -h
+          echo ""
+          echo "=== /proc/meminfo ==="
+          grep -E 'MemTotal|MemFree|MemAvailable|SwapTotal|Hugepages_Total' /proc/meminfo
+          echo ""
+          TOTAL_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+          TOTAL_MB=$((TOTAL_KB / 1024))
+          echo "Total RAM: ${TOTAL_MB}MB"
+          if [ "$TOTAL_MB" -ge 1024 ]; then
+            echo "MEMORY: sufficient for VM (>= 1024MB)"
+          else
+            echo "MEMORY: insufficient for VM (< 1024MB)"
+          fi
+
       - name: Try loading KVM module
         run: |
           echo "=== Attempting to load kvm module ==="
@@ -93,14 +110,18 @@ jobs:
           echo "/dev/kvm exists:       $KVM_DEV"
           echo "CPU VT supported:      $CPU_VT"
           echo "KVM module loaded:     $KVM_MOD"
+          TOTAL_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+          TOTAL_MB=$((TOTAL_KB / 1024))
+          echo "Total RAM:             ${TOTAL_MB}MB"
           echo ""
-          if [ "$KVM_DEV" = "yes" ] && [ "$CPU_VT" = "yes" ]; then
-            echo "RESULT: KVM is AVAILABLE"
+          if [ "$KVM_DEV" = "yes" ] && [ "$CPU_VT" = "yes" ] && [ "$TOTAL_MB" -ge 1024 ]; then
+            echo "RESULT: KVM is AVAILABLE (RAM sufficient)"
           else
             echo "RESULT: KVM is NOT available"
             echo ""
             echo "Missing:"
             [ "$KVM_DEV" != "yes" ] && echo "  - /dev/kvm device"
             [ "$CPU_VT" != "yes" ] && echo "  - CPU hardware virtualization (vmx/svm)"
+            [ "$TOTAL_MB" -lt 1024 ] && echo "  - Insufficient RAM (${TOTAL_MB}MB < 1024MB)"
           fi
           echo "================================"
