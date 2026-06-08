@@ -1,0 +1,103 @@
+name: Test KVM Support
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  test-kvm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check KVM device
+        run: |
+          echo "=== /dev/kvm ==="
+          if [ -e /dev/kvm ]; then
+            echo "EXISTS: yes"
+            ls -l /dev/kvm
+          else
+            echo "EXISTS: no"
+          fi
+
+      - name: Check KVM kernel modules
+        run: |
+          echo "=== Loaded KVM modules ==="
+          lsmod | grep kvm || echo "No kvm modules loaded"
+          echo ""
+          echo "=== Available KVM modules ==="
+          modprobe --show-depends kvm 2>/dev/null || echo "kvm module not available"
+          modprobe --show-depends kvm_intel 2>/dev/null || echo "kvm_intel module not available"
+          modprobe --show-depends kvm_amd 2>/dev/null || echo "kvm_amd module not available"
+
+      - name: Check CPU virtualization flags
+        run: |
+          echo "=== CPU flags ==="
+          grep -E 'vmx|svm' /proc/cpuinfo > /dev/null && echo "Hardware virtualization: SUPPORTED" || echo "Hardware virtualization: NOT SUPPORTED"
+          echo ""
+          echo "=== Virtualization flag count ==="
+          echo "vmx (Intel): $(grep -c vmx /proc/cpuinfo 2>/dev/null || echo 0)"
+          echo "svm (AMD):   $(grep -c svm /proc/cpuinfo 2>/dev/null || echo 0)"
+
+      - name: Check KVM permissions
+        run: |
+          echo "=== Current user ==="
+          id
+          echo ""
+          if [ -e /dev/kvm ]; then
+            echo "=== /dev/kvm permissions ==="
+            stat /dev/kvm
+            echo ""
+            echo "=== KVM group ==="
+            getent group kvm || echo "kvm group does not exist"
+            echo ""
+            echo "=== User in kvm group? ==="
+            groups | grep -q kvm && echo "yes" || echo "no"
+            echo ""
+            echo "=== Test read/write access ==="
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              echo "ACCESS: read/write OK"
+            elif [ -r /dev/kvm ]; then
+              echo "ACCESS: read only"
+            else
+              echo "ACCESS: denied"
+            fi
+          else
+            echo "SKIPPED: /dev/kvm does not exist"
+          fi
+
+      - name: Try loading KVM module
+        run: |
+          echo "=== Attempting to load kvm module ==="
+          sudo modprobe kvm 2>&1 || echo "modprobe kvm failed"
+          sudo modprobe kvm_intel 2>&1 || echo "modprobe kvm_intel failed"
+          sudo modprobe kvm_amd 2>&1 || echo "modprobe kvm_amd failed"
+          echo ""
+          echo "=== After modprobe ==="
+          lsmod | grep kvm || echo "No kvm modules loaded"
+
+      - name: Summary
+        run: |
+          echo "================================"
+          echo "       KVM SUPPORT SUMMARY"
+          echo "================================"
+          KVM_DEV="no"
+          [ -e /dev/kvm ] && KVM_DEV="yes"
+          CPU_VT="no"
+          grep -E 'vmx|svm' /proc/cpuinfo > /dev/null 2>&1 && CPU_VT="yes"
+          KVM_MOD="no"
+          lsmod | grep -q kvm && KVM_MOD="yes"
+          echo ""
+          echo "/dev/kvm exists:       $KVM_DEV"
+          echo "CPU VT supported:      $CPU_VT"
+          echo "KVM module loaded:     $KVM_MOD"
+          echo ""
+          if [ "$KVM_DEV" = "yes" ] && [ "$CPU_VT" = "yes" ]; then
+            echo "RESULT: KVM is AVAILABLE"
+          else
+            echo "RESULT: KVM is NOT available"
+            echo ""
+            echo "Missing:"
+            [ "$KVM_DEV" != "yes" ] && echo "  - /dev/kvm device"
+            [ "$CPU_VT" != "yes" ] && echo "  - CPU hardware virtualization (vmx/svm)"
+          fi
+          echo "================================"
