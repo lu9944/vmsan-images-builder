@@ -4,10 +4,8 @@
 FROM node:20-slim AS frontend-builder
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=8192
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
 COPY frontend/ .
-RUN npm run build:pro
+RUN npm install && npm run build:pro
 
 # =============================================================================
 # Stage 2: Build 1Panel Go binaries
