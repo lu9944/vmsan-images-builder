@@ -26,12 +26,12 @@ COPY --from=frontend-builder /build/core/cmd/server/web/ ./core/cmd/server/web/
 
 RUN cd /build/core \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-       -tags=xpack -trimpath -ldflags '-s -w' \
+       -trimpath -ldflags '-s -w' \
        -o /build/1panel-core ./cmd/server/main.go
 
 RUN cd /build/agent \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-       -tags=xpack -trimpath -ldflags '-s -w' \
+       -trimpath -ldflags '-s -w' \
        -o /build/1panel-agent ./cmd/server/main.go
 
 # =============================================================================
