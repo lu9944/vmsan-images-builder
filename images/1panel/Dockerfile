@@ -2,10 +2,12 @@
 # Stage 1: Build 1Panel frontend (Node.js)
 # =============================================================================
 FROM node:20-slim AS frontend-builder
-WORKDIR /app
+WORKDIR /build
 ENV NODE_OPTIONS=--max-old-space-size=8192
-COPY frontend/ .
-RUN npm install && npm run build:pro
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+RUN cd frontend && npm install
+COPY frontend/ ./frontend/
+RUN cd frontend && npm run build:pro
 
 # =============================================================================
 # Stage 2: Build 1Panel Go binaries
@@ -20,7 +22,7 @@ RUN cd core && go mod download \
 
 COPY core/ ./core/
 COPY agent/ ./agent/
-COPY --from=frontend-builder /app/dist ./core/cmd/server/web/assets/
+COPY --from=frontend-builder /build/core/cmd/server/web/ ./core/cmd/server/web/
 
 RUN cd /build/core \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
