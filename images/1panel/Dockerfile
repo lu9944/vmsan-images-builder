@@ -10,7 +10,7 @@ RUN npm install && npm run build:pro
 # =============================================================================
 # Stage 2: Build 1Panel Go binaries
 # =============================================================================
-FROM golang:1.24-bookworm AS go-builder
+FROM golang:1.25-bookworm AS go-builder
 WORKDIR /build
 
 COPY core/go.mod core/go.sum ./core/
