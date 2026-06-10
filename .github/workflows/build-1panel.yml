@@ -16,7 +16,7 @@ on:
       image_size:
         description: 'Minimum image size in MB'
         required: false
-        default: '4096'
+        default: '8192'
   # schedule:
   #   - cron: '0 2 * * *'
 
@@ -52,7 +52,7 @@ jobs:
           chmod +x build.sh
           ./build.sh \
             --image 1panel \
-            --size "${{ github.event.inputs.image_size || '4096' }}" \
+            --size "${{ github.event.inputs.image_size || '8192' }}" \
             --no-docker-cache
         env:
           SOURCE_REF: ${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}
@@ -67,7 +67,7 @@ jobs:
           ls -lh /tmp/vmlinux-6.1-docker
 
       - name: Test VM boot with vmsan
-        timeout-minutes: 10
+        timeout-minutes: 15
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -79,7 +79,7 @@ jobs:
           VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
             --rootfs "$IMAGE" \
             --kernel "$KERNEL" \
-            --memory 2048 \
+            --memory 4096 \
             --vcpus 2 \
             --publish-port 8888 \
             --json || true)
@@ -118,11 +118,15 @@ jobs:
           sudo env "PATH=$PATH" vmsan exec "$VM_ID" echo "VM is alive"
 
           echo "=== Checking systemd services ==="
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active 1panel-core containerd docker
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active 1panel-core containerd docker preinstall-containers register-apps
 
           echo "=== Checking Docker ==="
           sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker info 2>&1 | head -20 || echo "docker info failed"
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker compose version 2>&1 || echo "docker compose version failed"
           sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker ps 2>&1 || echo "docker ps failed"
+
+          echo "=== Checking pre-installed apps ==="
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker ps --filter "name=1Panel-mysql" --filter "name=1Panel-openresty" 2>&1 || echo "docker ps filter failed"
 
           echo "=== Cleanup ==="
           sudo env "PATH=$PATH" vmsan stop "$VM_ID"
@@ -149,10 +153,14 @@ jobs:
             Built from 1Panel `${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}`
             - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
             - **Kernel**: Docker-capable vmlinux-6.1 (TUN/MACVLAN/IPVS/netfilter)
+            - **Pre-installed apps**: MySQL 8.0.46, OpenResty 1.31.1.1-0-noble
+            - **Tools**: docker compose plugin
             - **Port**: 8888
             - **Entrance**: /1panel
             - **Username**: 1panel
             - **Password**: 1panel
+            - **MySQL**: root / mysql123456 (port 3306)
+            - **OpenResty**: port 80/443 (host network)
           files: ./1panel-rootfs.ext4.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
