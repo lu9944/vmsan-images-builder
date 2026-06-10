@@ -62,12 +62,9 @@ jobs:
 
       - name: Download Docker-capable kernel
         run: |
-          KERNEL_DIR="$HOME/.vmsan/kernels"
-          mkdir -p "$KERNEL_DIR"
-          curl -fSL -o "$KERNEL_DIR/vmlinux-6.1-docker" \
+          curl -fSL -o /tmp/vmlinux-6.1-docker \
             "https://github.com/lu9944/firecracker/releases/download/docker-kernel-6.1.172-20260610012612/vmlinux-6.1.172-docker"
-          chmod +x "$KERNEL_DIR/vmlinux-6.1-docker"
-          ls -lh "$KERNEL_DIR/"
+          ls -lh /tmp/vmlinux-6.1-docker
 
       - name: Test VM boot with vmsan
         timeout-minutes: 10
@@ -76,7 +73,7 @@ jobs:
           set -euo pipefail
 
           IMAGE="$(pwd)/1panel-rootfs.ext4"
-          KERNEL="$HOME/.vmsan/kernels/vmlinux-6.1-docker"
+          KERNEL="/tmp/vmlinux-6.1-docker"
           echo "=== Booting VM from $IMAGE ($(du -sh "$IMAGE" | cut -f1)) with Docker kernel ==="
 
           VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
