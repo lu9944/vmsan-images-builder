@@ -5,15 +5,14 @@ on:
     branches: [main]
     paths:
       - 'images/maxkb/**'
-      - 'docker-images/mkb-pro.tar.gz'
       - 'build.sh'
       - '.github/workflows/build-maxkb.yml'
   workflow_dispatch:
     inputs:
       mkb_pro_url:
-        description: 'mkb-pro offline package URL'
-        required: false
-        default: 'https://github.com/lu9944/vmsan-images-builder/releases/download/v1.0.0/mkb-pro.tar.gz'
+        description: 'mkb-pro offline package URL (required)'
+        required: true
+        type: string
       image_size:
         description: 'Minimum image size in MB'
         required: false
@@ -32,12 +31,9 @@ jobs:
 
       - name: Download mkb-pro offline package
         run: |
-          URL="${{ github.event.inputs.mkb_pro_url || 'https://github.com/lu9944/vmsan-images-builder/releases/download/v1.0.0/mkb-pro.tar.gz' }}"
           mkdir -p docker-images
-          if [ ! -f docker-images/mkb-pro.tar.gz ]; then
-            echo "Downloading mkb-pro from $URL ..."
-            curl -fSL -o docker-images/mkb-pro.tar.gz "$URL"
-          fi
+          echo "Downloading mkb-pro from ${{ inputs.mkb_pro_url }} ..."
+          curl -fSL -o docker-images/mkb-pro.tar.gz "${{ inputs.mkb_pro_url }}"
           ls -lh docker-images/mkb-pro.tar.gz
 
       - name: Install dependencies
@@ -57,7 +53,7 @@ jobs:
           ./build.sh \
             --image maxkb \
             --source-dir /tmp/maxkb-source \
-            --size "${{ github.event.inputs.image_size || '8192' }}" \
+            --size "${{ inputs.image_size || '8192' }}" \
             --no-docker-cache
 
       - name: Install vmsan
