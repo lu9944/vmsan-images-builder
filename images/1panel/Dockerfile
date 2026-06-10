@@ -50,9 +50,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 iputils-tracepath netcat-openbsd \
     vim-tiny nano jq dnsutils tcpdump strace lsof less \
     containerd docker.io sqlite3 \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /usr/local/lib/docker/cli-plugins \
-    && curl -sfL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /usr/local/lib/docker/cli-plugins \
+    && curl -sfL "https://github.com/docker/compose/releases/download/v2.36.1/docker-compose-linux-x86_64" \
          -o /usr/local/lib/docker/cli-plugins/docker-compose \
     && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
