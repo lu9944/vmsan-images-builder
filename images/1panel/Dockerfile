@@ -52,10 +52,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     containerd docker.io sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /usr/local/lib/docker/cli-plugins \
-    && curl -sfL "https://github.com/docker/compose/releases/download/v2.36.1/docker-compose-linux-x86_64" \
-         -o /usr/local/lib/docker/cli-plugins/docker-compose \
-    && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+RUN mkdir -p /usr/local/lib/docker/cli-plugins
+ADD "https://github.com/docker/compose/releases/download/v2.36.1/docker-compose-linux-x86_64" /usr/local/lib/docker/cli-plugins/docker-compose
+RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
     && mkdir -p /etc/sudoers.d \
