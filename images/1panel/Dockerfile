@@ -90,9 +90,9 @@ CHANGE_USER_INFO=\n' > /usr/local/bin/1pctl \
 RUN mkdir -p /opt/1panel/conf /opt/1panel/db /opt/1panel/log \
     /opt/1panel/cache /opt/1panel/tmp /opt/1panel/data \
     /opt/1panel/resource /opt/1panel/secret /opt/1panel/geo \
-    && mkdir -p /opt/1panel/resource/apps/remote \
-    && mkdir -p /opt/1panel/resource/icon \
-    && mkdir -p /opt/1panel/apps \
+    /opt/1panel/resource/apps/remote \
+    /opt/1panel/resource/icon \
+    /opt/1panel/apps \
     && chown -R root:root /opt/1panel
 
 # ---------------------------------------------------------------------------
@@ -221,6 +221,10 @@ done\n\
 docker info >/dev/null 2>&1 || { echo "ERROR: docker not ready" >&2; exit 1; }\n\
 echo "=== preinstall: creating 1panel-network ===" >&2\n\
 docker network inspect 1panel-network >/dev/null 2>&1 || docker network create 1panel-network\n\
+echo "=== preinstall: loading mysql image from cache ===" >&2\n\
+docker load -i /opt/1panel/cache/mysql-8.0.46.tar\n\
+echo "=== preinstall: loading openresty image from cache ===" >&2\n\
+docker load -i /opt/1panel/cache/openresty-1.31.1.1-0-noble.tar\n\
 echo "=== preinstall: starting mysql ===" >&2\n\
 cd /opt/1panel/apps/mysql/mysql\n\
 docker compose up -d 2>&1 || echo "WARN: mysql compose up failed" >&2\n\
@@ -228,8 +232,10 @@ echo "=== preinstall: starting openresty ===" >&2\n\
 cd /opt/1panel/apps/openresty/openresty\n\
 docker compose up -d 2>&1 || echo "WARN: openresty compose up failed" >&2\n\
 echo "=== preinstall: waiting for containers ===" >&2\n\
-sleep 15\n\
+sleep 10\n\
 docker ps 2>&1 || true\n\
+echo "=== preinstall: cleaning up image cache ===" >&2\n\
+rm -f /opt/1panel/cache/mysql-8.0.46.tar /opt/1panel/cache/openresty-1.31.1.1-0-noble.tar\n\
 touch "$MARKER"\n\
 echo "=== preinstall: done ===" >&2\n' > /usr/local/bin/preinstall-containers.sh \
     && chmod +x /usr/local/bin/preinstall-containers.sh

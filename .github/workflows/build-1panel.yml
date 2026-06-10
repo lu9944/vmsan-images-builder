@@ -16,7 +16,7 @@ on:
       image_size:
         description: 'Minimum image size in MB'
         required: false
-        default: '8192'
+        default: '12288'
   # schedule:
   #   - cron: '0 2 * * *'
 
@@ -52,7 +52,7 @@ jobs:
           chmod +x build.sh
           ./build.sh \
             --image 1panel \
-            --size "${{ github.event.inputs.image_size || '8192' }}" \
+            --size "${{ github.event.inputs.image_size || '12288' }}" \
             --no-docker-cache
         env:
           SOURCE_REF: ${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}
