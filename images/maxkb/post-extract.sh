@@ -29,7 +29,9 @@ cp "$SRC/maxkb/docker-compose-pgsql.yml" "$ROOTFS/opt/maxkb/"
 cp "$SRC/maxkb/docker-compose-redis.yml" "$ROOTFS/opt/maxkb/"
 
 echo "[post-extract] Generating config from templates..."
+set -a
 source "$SRC/install.conf"
+set +a
 
 mkdir -p "$ROOTFS/opt/maxkb/conf"
 envsubst < "$SRC/maxkb/templates/pgsql.env" > "$ROOTFS/opt/maxkb/conf/pgsql.env"
