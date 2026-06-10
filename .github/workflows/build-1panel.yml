@@ -88,7 +88,7 @@ jobs:
           echo "$VM_OUT"
           echo "=== end output ==="
 
-          VM_ID=$(echo "$VM_OUT" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"')
+          VM_ID=$(echo "$VM_OUT" | grep -oE '"vmId"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -oE '"[^"]*"$' | tr -d '"')
           echo "VM ID: $VM_ID"
 
           if [ -z "$VM_ID" ]; then
@@ -102,7 +102,7 @@ jobs:
             STATUS=$(vmsan list --json | python3 -c "
           import json, sys
           vms = json.load(sys.stdin)
-          vm = next((v for v in vms if v['id'] == '$VM_ID'), None)
+          vm = next((v for v in vms if v['vmId'] == '$VM_ID'), None)
           print(vm['status'] if vm else 'not_found')
           " || echo "parse_error")
             echo "  attempt $i: status=$STATUS"
