@@ -38,19 +38,7 @@ RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
 COPY --from=builder /build/reasonix /usr/local/bin/reasonix
 RUN chmod +x /usr/local/bin/reasonix
 
-RUN mkdir -p /home/ubuntu/.config/reasonix \
-    && printf 'default_model = "deepseek"\n\
-\n\
-[[providers]]\n\
-name        = "deepseek"\n\
-kind        = "openai"\n\
-base_url    = "https://api.deepseek.com"\n\
-models      = ["deepseek-v4-flash", "deepseek-v4-pro"]\n\
-default     = "deepseek-v4-flash"\n\
-api_key_env = "DEEPSEEK_API_KEY"\n\
-context_window = 1000000\n\
-effort      = "high"\n' > /home/ubuntu/.config/reasonix/config.toml \
-    && chown -R ubuntu:ubuntu /home/ubuntu/.config
+RUN printf 'DEEPSEEK_API_KEY=sk-change-me\n' > /etc/default/reasonix
 
 RUN printf '[Unit]\n\
 Description=Reasonix AI Coding Agent (Web Server)\n\
@@ -59,6 +47,7 @@ After=network.target\n\
 [Service]\n\
 Type=simple\n\
 User=ubuntu\n\
+EnvironmentFile=/etc/default/reasonix\n\
 Environment=HOME=/home/ubuntu\n\
 ExecStart=/usr/local/bin/reasonix serve --addr 0.0.0.0:8787\n\
 Restart=always\n\

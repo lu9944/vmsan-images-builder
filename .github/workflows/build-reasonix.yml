@@ -151,11 +151,13 @@ jobs:
             Open `http://<VM-IP>:8787` in your browser.
 
             ### Configuration
-            Default provider is DeepSeek. Set API key before starting:
+            Default provider is DeepSeek. Set your API key:
             ```bash
-            vmsan exec <vmId> bash -c 'echo "DEEPSEEK_API_KEY=your-key" >> ~/.config/reasonix/config.toml'
+            # Inside the VM, edit the environment file:
+            sudo nano /etc/default/reasonix
+            # Change: DEEPSEEK_API_KEY=sk-your-real-key
+            sudo systemctl restart reasonix
             ```
-            Or edit `/home/ubuntu/.config/reasonix/config.toml` inside the VM.
           files: ./reasonix-rootfs.ext4.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
