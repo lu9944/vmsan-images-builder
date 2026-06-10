@@ -49,8 +49,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ncurses-base openssl procps tar unzip debianutils whois zstd \
     iproute2 iputils-tracepath netcat-openbsd \
     vim-tiny nano jq dnsutils tcpdump strace lsof less \
-    containerd docker.io sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
+    containerd docker.io sqlite3 tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone
 
 RUN mkdir -p /usr/local/lib/docker/cli-plugins
 ADD "https://github.com/docker/compose/releases/download/v2.36.1/docker-compose-linux-x86_64" /usr/local/lib/docker/cli-plugins/docker-compose
@@ -151,6 +153,8 @@ RUN mkdir -p /opt/1panel/apps/mysql/mysql/conf \
           /opt/1panel/apps/mysql/mysql/docker-compose.yml \
     && sed -i '\|/etc/timezone|d; \|/etc/localtime|d' \
           /opt/1panel/apps/mysql/mysql/docker-compose.yml \
+    && sed -i '/environment:/a\      TZ: Asia/Shanghai' \
+          /opt/1panel/apps/mysql/mysql/docker-compose.yml \
     && cp /opt/1panel/resource/apps/remote/mysql/8.0.46/conf/my.cnf \
           /opt/1panel/apps/mysql/mysql/conf/my.cnf \
     && printf 'CONTAINER_NAME=1Panel-mysql-ppre\nPANEL_DB_ROOT_PASSWORD=mysql123456\nPANEL_APP_PORT_HTTP=3306\n' \
@@ -182,6 +186,8 @@ RUN printf 'services:\n\
     container_name: ${CONTAINER_NAME}\n\
     restart: always\n\
     network_mode: host\n\
+    environment:\n\
+      TZ: Asia/Shanghai\n\
     volumes:\n\
       - ./conf/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf\n\
       - ./conf/fastcgi_params:/usr/local/openresty/nginx/conf/fastcgi_params\n\
