@@ -60,18 +60,29 @@ jobs:
       - name: Install vmsan
         run: curl -fsSL https://vmsan.dev/install | sudo bash
 
+      - name: Download Docker-capable kernel
+        run: |
+          KERNEL_DIR="$HOME/.vmsan/kernels"
+          mkdir -p "$KERNEL_DIR"
+          curl -fSL -o "$KERNEL_DIR/vmlinux-6.1-docker" \
+            "https://github.com/lu9944/firecracker/releases/download/docker-kernel-6.1.172-20260610012612/vmlinux-6.1.172-docker"
+          chmod +x "$KERNEL_DIR/vmlinux-6.1-docker"
+          ls -lh "$KERNEL_DIR/"
+
       - name: Test VM boot with vmsan
-        timeout-minutes: 5
+        timeout-minutes: 10
         continue-on-error: true
         run: |
           set -euo pipefail
 
           IMAGE="$(pwd)/1panel-rootfs.ext4"
-          echo "=== Booting VM from $IMAGE ($(du -sh "$IMAGE" | cut -f1)) ==="
+          KERNEL="$HOME/.vmsan/kernels/vmlinux-6.1-docker"
+          echo "=== Booting VM from $IMAGE ($(du -sh "$IMAGE" | cut -f1)) with Docker kernel ==="
 
           VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
             --rootfs "$IMAGE" \
-            --memory 1024 \
+            --kernel "$KERNEL" \
+            --memory 2048 \
             --vcpus 2 \
             --publish-port 8888 \
             --json || true)
@@ -89,7 +100,7 @@ jobs:
           fi
 
           echo "=== Waiting for VM to boot ==="
-          for i in $(seq 1 12); do
+          for i in $(seq 1 24); do
             sleep 5
             STATUS=$(vmsan list --json | python3 -c "
           import json, sys
@@ -113,7 +124,16 @@ jobs:
           fi
 
           echo "=== Running command inside VM ==="
-          vmsan exec "$VM_ID" echo "VM is alive"
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" echo "VM is alive"
+
+          echo "=== Checking systemd services ==="
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active 1panel-core || echo "1panel-core: not active"
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active containerd || echo "containerd: not active"
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active docker || echo "docker: not active"
+
+          echo "=== Checking Docker ==="
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" docker info 2>&1 | head -20 || echo "docker info failed"
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" docker ps 2>&1 || echo "docker ps failed"
 
           echo "=== Cleanup ==="
           sudo env "PATH=$PATH" vmsan stop "$VM_ID"
@@ -139,6 +159,7 @@ jobs:
           body: |
             Built from 1Panel `${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}`
             - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
+            - **Kernel**: Docker-capable vmlinux-6.1 (TUN/MACVLAN/IPVS/netfilter)
             - **Port**: 8888
             - **Entrance**: /1panel
             - **Username**: 1panel
