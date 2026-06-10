@@ -1,0 +1,161 @@
+name: Build reasonix rootfs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'images/reasonix/**'
+      - 'build.sh'
+      - '.github/workflows/build-reasonix.yml'
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'DeepSeek-Reasonix git ref (branch/tag/commit). Leave empty to use latest release.'
+        required: false
+        default: ''
+      image_size:
+        description: 'Minimum image size in MB'
+        required: false
+        default: '2048'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve latest Reasonix release tag
+        id: resolve_ref
+        if: github.event.inputs.source_ref == ''
+        run: |
+          LATEST_TAG=$(curl -sf "https://api.github.com/repos/esengine/DeepSeek-Reasonix/releases/latest" | python3 -c "import json,sys;print(json.load(sys.stdin)['tag_name'])")
+          echo "ref=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved latest release: $LATEST_TAG"
+
+      - name: Install dependencies
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y e2fsprogs && break
+            echo "Retry $i: apt-get failed, retrying in 10s..."
+            sleep 10
+          done
+
+      - name: Build rootfs image
+        run: |
+          chmod +x build.sh
+          ./build.sh \
+            --image reasonix \
+            --size "${{ github.event.inputs.image_size || '2048' }}" \
+            --no-docker-cache
+        env:
+          SOURCE_REF: ${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}
+
+      - name: Install vmsan
+        run: curl -fsSL https://vmsan.dev/install | sudo bash
+
+      - name: Test VM boot with vmsan
+        timeout-minutes: 5
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          IMAGE="$(pwd)/reasonix-rootfs.ext4"
+          echo "=== Booting VM from $IMAGE ($(du -sh "$IMAGE" | cut -f1)) ==="
+
+          VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
+            --rootfs "$IMAGE" \
+            --memory 512 \
+            --vcpus 1 \
+            --publish-port 8787 \
+            --json || true)
+
+          echo "=== vmsan create output ==="
+          echo "$VM_OUT"
+          echo "=== end output ==="
+
+          VM_ID=$(echo "$VM_OUT" | grep -oE '"vmId"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -oE '"[^"]*"$' | tr -d '"')
+          echo "VM ID: $VM_ID"
+
+          if [ -z "$VM_ID" ]; then
+            echo "ERROR: No VM ID returned from vmsan create"
+            exit 1
+          fi
+
+          echo "=== Waiting for VM to boot ==="
+          for i in $(seq 1 24); do
+            sleep 5
+            if sudo env "PATH=$PATH" vmsan exec "$VM_ID" echo "ok" 2>/dev/null | grep -q "ok"; then
+              STATUS="running"
+            else
+              STATUS="waiting"
+            fi
+            echo "  attempt $i: status=$STATUS"
+            if [ "$STATUS" = "running" ]; then break; fi
+          done
+
+          if [ "$STATUS" != "running" ]; then
+            echo "ERROR: VM did not reach running state"
+            sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "=== Running command inside VM ==="
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" echo "VM is alive"
+
+          echo "=== Checking reasonix binary ==="
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" reasonix version
+
+          echo "=== Checking systemd service ==="
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active reasonix
+
+          echo "=== Cleanup ==="
+          sudo env "PATH=$PATH" vmsan stop "$VM_ID"
+          sudo env "PATH=$PATH" vmsan remove "$VM_ID"
+
+          echo "=== VM test passed ==="
+
+      - name: Generate filename
+        id: meta
+        run: |
+          TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+          REF="${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}"
+          BASENAME="reasonix-rootfs-${REF}-${TIMESTAMP}"
+          echo "basename=${BASENAME}" >> "$GITHUB_OUTPUT"
+          echo "ext4=${BASENAME}.ext4" >> "$GITHUB_OUTPUT"
+          echo "gz=${BASENAME}.ext4.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release & Upload
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.basename }}
+          name: "Reasonix rootfs ${{ steps.meta.outputs.basename }}"
+          body: |
+            Built from DeepSeek-Reasonix `${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}`
+            - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
+
+            ### Usage
+            ```bash
+            # Launch VM (reasonix web UI on port 8787)
+            sudo env "PATH=$PATH" vmsan create \
+              --rootfs reasonix-rootfs.ext4 \
+              --memory 1024 \
+              --vcpus 2 \
+              --publish-port 8787
+            ```
+
+            Open `http://<VM-IP>:8787` in your browser.
+
+            ### Configuration
+            Default provider is DeepSeek. Set API key before starting:
+            ```bash
+            vmsan exec <vmId> bash -c 'echo "DEEPSEEK_API_KEY=your-key" >> ~/.config/reasonix/config.toml'
+            ```
+            Or edit `/home/ubuntu/.config/reasonix/config.toml` inside the VM.
+          files: ./reasonix-rootfs.ext4.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
