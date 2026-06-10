@@ -87,7 +87,9 @@ CHANGE_USER_INFO=\n' > /usr/local/bin/1pctl \
     && chmod +x /usr/local/bin/1pctl \
     && ln -sf /usr/local/bin/1pctl /usr/bin/1pctl
 
-RUN mkdir -p /opt/1panel/{conf,db,log,cache,tmp,data,resource,secret,geo} \
+RUN mkdir -p /opt/1panel/conf /opt/1panel/db /opt/1panel/log \
+    /opt/1panel/cache /opt/1panel/tmp /opt/1panel/data \
+    /opt/1panel/resource /opt/1panel/secret /opt/1panel/geo \
     && mkdir -p /opt/1panel/resource/apps/remote \
     && mkdir -p /opt/1panel/resource/icon \
     && mkdir -p /opt/1panel/apps \
@@ -142,7 +144,9 @@ RUN set -x \
 # ---------------------------------------------------------------------------
 # Create MySQL install directory (pre-installed)
 # ---------------------------------------------------------------------------
-RUN mkdir -p /opt/1panel/apps/mysql/mysql/{conf,data,log} \
+RUN mkdir -p /opt/1panel/apps/mysql/mysql/conf \
+    /opt/1panel/apps/mysql/mysql/data \
+    /opt/1panel/apps/mysql/mysql/log \
     && cp /opt/1panel/resource/apps/remote/mysql/8.0.46/docker-compose.yml \
           /opt/1panel/apps/mysql/mysql/docker-compose.yml \
     && cp /opt/1panel/resource/apps/remote/mysql/8.0.46/conf/my.cnf \
@@ -157,7 +161,8 @@ RUN mkdir -p /opt/1panel/apps/mysql/mysql/{conf,data,log} \
 RUN set -x \
     && R=/opt/1panel/resource/apps/remote/openresty/1.31.1.1-0-noble \
     && I=/opt/1panel/apps/openresty/openresty \
-    && mkdir -p "$I"/{conf/{default,ssl},log,root,1pwaf/data/conf} \
+    && mkdir -p "$I/conf/default" "$I/conf/ssl" "$I/log" "$I/root" \
+       "$I/1pwaf/data/conf" \
     && cp "$R/conf/nginx.conf"       "$I/conf/" \
     && cp "$R/conf/fastcgi_params"   "$I/conf/" \
     && cp "$R/conf/fastcgi-php.conf" "$I/conf/" \
@@ -166,7 +171,7 @@ RUN set -x \
     && (cp "$R/conf/ssl/"*.conf "$I/conf/ssl/" 2>/dev/null || true) \
     && (cp -r "$R/root/"* "$I/root/" 2>/dev/null || true) \
     && touch "$I/1pwaf/data/conf/waf.conf" \
-    && mkdir -p /opt/1panel/www/{conf.d,stream.d}
+    && mkdir -p /opt/1panel/www/conf.d /opt/1panel/www/stream.d
 
 # OpenResty docker-compose.yml (without build section — uses pre-built image)
 RUN printf 'services:\n\
