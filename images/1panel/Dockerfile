@@ -50,7 +50,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 iputils-tracepath netcat-openbsd \
     vim-tiny nano jq dnsutils tcpdump strace lsof less \
     containerd docker.io sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone
 
 RUN mkdir -p /usr/local/lib/docker/cli-plugins
 ADD "https://github.com/docker/compose/releases/download/v2.36.1/docker-compose-linux-x86_64" /usr/local/lib/docker/cli-plugins/docker-compose
