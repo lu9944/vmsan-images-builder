@@ -138,6 +138,10 @@ sudo tune2fs -m 0 "$OUTPUT" >/dev/null 2>&1
 OUTPUT_BYTES="$(stat -c %s "$OUTPUT")"
 info "Done: $OUTPUT ($(( OUTPUT_BYTES / 1024 / 1024 ))MB)"
 
+sudo rm -rf "$BUILD_DIR/rootfs" "$BUILD_DIR/rootfs.tar"
+docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+info "Cleaned up build artifacts to free disk space"
+
 COMPRESSED="${OUTPUT}.gz"
 info "Compressing: $COMPRESSED"
 gzip -k -9 "$OUTPUT"
