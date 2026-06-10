@@ -42,7 +42,7 @@ FROM ubuntu:24.04
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    systemd systemd-sysv sudo \
+    systemd systemd-sysv dbus sudo \
     curl wget git \
     bind9-utils bzip2 findutils gzip iptables iputils-ping \
     ncurses-base openssl procps tar unzip debianutils whois zstd \
@@ -55,6 +55,7 @@ RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
     && mkdir -p /etc/sudoers.d \
     && echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu \
     && chmod 440 /etc/sudoers.d/ubuntu \
+    && usermod -aG docker ubuntu \
     && chown -R ubuntu:ubuntu /home/ubuntu
 
 COPY --from=go-builder /build/1panel-core /usr/local/bin/1panel-core
