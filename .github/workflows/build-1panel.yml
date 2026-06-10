@@ -99,23 +99,17 @@ jobs:
           echo "=== Waiting for VM to boot ==="
           for i in $(seq 1 24); do
             sleep 5
-            STATUS=$(vmsan list --json | python3 -c "
-          import json, sys
-          vms = json.load(sys.stdin)
-          vm = next((v for v in vms if v['vmId'] == '$VM_ID'), None)
-          print(vm['status'] if vm else 'not_found')
-          " || echo "parse_error")
+            if sudo env "PATH=$PATH" vmsan exec "$VM_ID" echo "ok" 2>/dev/null | grep -q "ok"; then
+              STATUS="running"
+            else
+              STATUS="waiting"
+            fi
             echo "  attempt $i: status=$STATUS"
             if [ "$STATUS" = "running" ]; then break; fi
-            if [ "$STATUS" = "error" ] || [ "$STATUS" = "stopped" ]; then
-              echo "ERROR: VM entered bad state: $STATUS"
-              sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
-              exit 1
-            fi
           done
 
           if [ "$STATUS" != "running" ]; then
-            echo "ERROR: VM did not reach running state (status=$STATUS)"
+            echo "ERROR: VM did not reach running state"
             sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
             exit 1
           fi
