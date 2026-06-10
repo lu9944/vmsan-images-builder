@@ -1,6 +1,6 @@
 ---
 name: vmsan-image-builder
-description: Build vmsan-compatible ext4 rootfs images from Docker containers. Use when: packaging applications for Firecracker microVMs, creating systemd-based VM images, adding new image types, CI/CD pipeline tasks, Docker-in-Firecracker kernel work.
+description: Build vmsan-compatible ext4 rootfs images from Docker containers. Use when: packaging applications for Firecracker microVMs, creating systemd-based VM images, adding new image types, CI/CD pipeline tasks, Docker-in-Firecracker kernel work, pre-installing apps with embedded Docker images.
 ---
 
 ## Core Patterns
@@ -11,9 +11,23 @@ description: Build vmsan-compatible ext4 rootfs images from Docker containers. U
 
 **Multi-stage Docker Build**: Typical pattern — Stage 1 builds frontend (node:20-slim), Stage 2 optionally builds backend binaries (golang), Stage 3 is runtime (ubuntu:24.04 + systemd). vmsan-agent requires systemd.
 
-**ext4 Image Size**: `tar_bytes / 1024 / 1024 + 512` MB, minimum 1024MB. `--size` flag sets minimum, not exact size. Docker-in-VM images need 4096MB+.
+**ext4 Image Size**: `tar_bytes / 1024 / 1024 + 512` MB, minimum 1024MB. `--size` flag sets minimum, not exact size. Docker-in-VM images need 4096MB+; images with embedded Docker image tars need 12288MB+.
 
 **Systemd Service Pattern**: Service file at `/etc/systemd/system/<app>.service`, enabled via symlink in `multi-user.target.wants/`. Type=simple, Restart=always, After=network.target. **Must install `dbus` package** — without it `systemctl` fails with "Failed to connect to bus: No such file or directory".
+
+**Pre-installed Docker Apps Pattern**: Embed Docker images into rootfs for offline use:
+1. `post-extract.sh` runs `docker pull` + `docker save` on host to create tar files in `$ROOTFS/opt/.../cache/`
+2. `preinstall-containers.service` (After=docker, Before=app-core) runs `docker load` + `docker compose up -d`
+3. `register-apps.sh` (After=app-core) inserts records into app's SQLite database
+4. Marker files (`/opt/.../.preinstall-containers-done`, `.register-apps-done`) ensure idempotency
+
+**ubuntu:24.04 Dockerfile Gotchas**:
+- **ca-certificates**: Base image lacks this package — all `curl` HTTPS calls fail with exit code 77. Install it in the first `apt-get` layer.
+- **docker-compose-plugin**: NOT available in ubuntu:24.04 default repos. Use `ADD` directive to download binary from GitHub releases into `/usr/local/lib/docker/cli-plugins/`. Do NOT use `curl` (CA cert issue in early layers).
+- **Brace expansion**: Docker RUN uses `/bin/sh` (not bash). `mkdir -p path/{conf,data,log}` silently creates a literal `{conf,data,log}` directory. Always expand to individual paths.
+- **Timezone**: Install `tzdata`, symlink `/etc/localtime`, write `/etc/timezone`. For containers, use `TZ` env var — do NOT bind mount `/etc/localtime` (Docker-in-Firecracker overlay doesn't support it).
+
+**Complex Scripts via post-extract.sh**: When Dockerfile `printf` quoting gets unwieldy (e.g., register-apps.sh with SQL queries and nested variables), put the script in a separate file in `images/<name>/` and copy it via `post-extract.sh` using `cp "$SCRIPT_DIR/file.sh" "$ROOTFS/usr/local/bin/"`.
 
 **vmsan API (v0.3.0)**:
 - `vmsan create --json` outputs `{"vmId": "vm-xxx", ...}` — field is `"vmId"`, not `"id"`
@@ -32,7 +46,7 @@ description: Build vmsan-compatible ext4 rootfs images from Docker containers. U
 |------|---------|--------------|
 | `reference/ci-cd-workflows.md` | GitHub Actions workflows: build pipeline, KVM test, VM boot test, CI failures & fixes, vmsan API patterns | Working with CI/CD pipelines, adding new image workflows, debugging Actions |
 | `reference/qwenpaw-patching.md` | Active Dockerfile patches for QwenPaw: `_MAX_ZIP_BYTES` sed, python-multipart, env var upload limit, default config | Modifying Dockerfile patches, debugging upload size issues |
-| `reference/1panel-build.md` | 1Panel image build: 3-stage Dockerfile, Go+Node build, config from 1pctl script, Docker-in-VM, all gotchas | Building/modifying 1Panel image, adding similar Go+frontend apps |
+| `reference/1panel-build.md` | 1Panel image build: 3-stage Dockerfile, Go+Node build, config from 1pctl script, Docker-in-VM, pre-installed apps, all gotchas | Building/modifying 1Panel image, adding pre-installed apps, embedding Docker images |
 | `reference/docker-firecracker-kernel.md` | Docker-in-Firecracker kernel requirements, missing config items, custom kernel build process | Enabling Docker in Firecracker VMs, kernel compilation, adding kernel modules |
 
 ## Key Workflows

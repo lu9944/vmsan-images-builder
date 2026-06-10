@@ -44,9 +44,100 @@ RUN cd /build/agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath 
 ```
 
 ### Stage 3: 运行时 (ubuntu:24.04)
-- 安装 `systemd systemd-sysv dbus sudo` + Docker (`containerd docker.io`)
+- 安装 `systemd systemd-sysv dbus sudo ca-certificates tzdata sqlite3` + Docker (`containerd docker.io`)
+- **docker compose 插件**：用 `ADD` 指令从 GitHub Releases 下载到 `/usr/local/lib/docker/cli-plugins/`
 - 创建 ubuntu 用户并加入 docker 组：`usermod -aG docker ubuntu`
-- 两个 systemd service：`1panel-core.service` + `1panel-agent.service`
+- 设置时区：`ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime` + `echo "Asia/Shanghai" > /etc/timezone`
+- 四个 systemd service：`1panel-core`、`1panel-agent`、`preinstall-containers`、`register-apps`
+
+## 预装应用架构 (MySQL + OpenResty)
+
+### 三阶段启动流程
+
+VM 启动时按顺序执行：
+
+1. **containerd + docker** 启动
+2. **preinstall-containers.service** (After=docker, Before=1panel-core, Type=oneshot):
+   - 等待 Docker 就绪（最多 120s）
+   - 创建 `1panel-network` Docker 网络
+   - `docker load` 从本地缓存加载 MySQL 和 OpenResty 镜像
+   - `docker compose up -d` 启动两个容器
+   - 删除 tar 缓存文件释放磁盘空间
+   - 写入 marker 文件 `/opt/1panel/.preinstall-containers-done`
+3. **1panel-core.service + 1panel-agent.service** 启动
+   - 1Panel 将应用商店同步到 SQLite 数据库（`apps` + `app_details` 表）
+4. **register-apps.service** (After=1panel-core, Type=oneshot):
+   - 等待数据库和应用同步完成
+   - 向 `app_installs` 表插入 MySQL 和 OpenResty 安装记录
+   - 向 `databases` 表插入 MySQL 数据库记录
+   - 写入 marker 文件 `/opt/1panel/.register-apps-done`
+
+### Docker 镜像嵌入 rootfs（post-extract.sh）
+
+`post-extract.sh` 在宿主机上（build.sh 的 Docker 构建后）执行：
+```bash
+docker pull mysql:8.0.46
+docker save mysql:8.0.46 -o "$ROOTFS/opt/1panel/cache/mysql-8.0.46.tar"
+
+docker pull 1panel/openresty:1.31.1.1-0-noble
+docker save 1panel/openresty:1.31.1.1-0-noble -o "$ROOTFS/opt/1panel/cache/openresty-1.31.1.1-0-noble.tar"
+```
+
+同时将 `register-apps.sh` 复制到 rootfs（避免 Dockerfile 内复杂脚本的引号问题）：
+```bash
+cp "$SCRIPT_DIR/register-apps.sh" "$ROOTFS/usr/local/bin/register-apps.sh"
+```
+
+### 应用商店资源下载
+
+从 `1Panel-dev/appstore` GitHub 仓库下载 docker-compose.yml、配置文件等到 `/opt/1panel/resource/apps/remote/`。
+
+MySQL 的 docker-compose.yml 从官方商店复制后，需要用 `sed` 去掉 `/etc/timezone` 和 `/etc/localtime` 的 bind mount 行，并插入 `TZ: Asia/Shanghai` 环境变量。
+
+OpenResty 的 docker-compose.yml 是在 Dockerfile 中内嵌生成的（不包含 build 段，直接用预构建镜像）。
+
+### 预装默认设置
+
+| 应用 | 容器名 | 端口 | 凭据 |
+|------|--------|------|------|
+| MySQL 8.0.46 | `1Panel-mysql-ppre` | 3306 | root / `mysql123456` |
+| OpenResty 1.31.1.1-0-noble | `1Panel-openresty-opre` | 80/443 (host network) | N/A |
+
+### register-apps.sh 数据库注册
+
+脚本操作 1Panel 的 SQLite 数据库 `/opt/1panel/db/agent.db`：
+1. 等待 `apps` 表中 mysql 和 openresty 记录出现（1Panel 同步应用商店后写入）
+2. 查询 `app_details` 获取对应版本的 detail_id
+3. 向 `app_installs` 插入安装记录（包含 docker-compose 内容、env 参数）
+4. MySQL 还需要向 `databases` 表插入数据库连接信息
+
+所有 SQL 插入都用 marker 文件保证幂等性。
+
+## config.sh
+
+```bash
+SOURCE_REPO="https://github.com/1Panel-dev/1Panel.git"
+SOURCE_REF="latest-release"  # CI 中通过 GitHub API 解析为实际 tag
+IMAGE_SIZE=12288             # 嵌入 Docker 镜像 tar 需要更大空间
+TAG="1panel-rootfs:latest"
+OUTPUT="1panel-rootfs.ext4"
+```
+
+## 关键文件位置
+
+| 文件 | 路径 |
+|------|------|
+| 配置脚本 | `/usr/local/bin/1pctl` |
+| Core 二进制 | `/usr/local/bin/1panel-core` |
+| Agent 二进制 | `/usr/local/bin/1panel-agent` |
+| 数据目录 | `/opt/1panel/` |
+| Docker 镜像缓存 | `/opt/1panel/cache/` (启动后自动删除) |
+| Systemd 服务 (core) | `/etc/systemd/system/1panel-core.service` |
+| Systemd 服务 (agent) | `/etc/systemd/system/1panel-agent.service` |
+| Systemd 服务 (预装容器) | `/etc/systemd/system/preinstall-containers.service` |
+| Systemd 服务 (注册应用) | `/etc/systemd/system/register-apps.service` |
+| 预装容器脚本 | `/usr/local/bin/preinstall-containers.sh` |
+| 注册应用脚本 | `/usr/local/bin/register-apps.sh` |
 
 ## 已知 Gotcha 及解决方案
 
@@ -58,32 +149,8 @@ RUN cd /build/agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath 
 | 前端产物不在 `/app/dist` | vite `outDir: '../core/cmd/server/web'` | COPY 路径用 `/build/core/cmd/server/web/` |
 | systemctl "Failed to connect to bus" | 缺少 `dbus` 包 | 在 apt install 中加 `dbus` |
 | docker.sock permission denied | `vmsan exec` 以 ubuntu 用户运行 | VM 内用 `sudo docker`，Dockerfile 中 `usermod -aG docker ubuntu` |
-
-## config.sh
-
-```bash
-SOURCE_REPO="https://github.com/1Panel-dev/1Panel.git"
-SOURCE_REF="latest-release"  # CI 中通过 GitHub API 解析为实际 tag
-IMAGE_SIZE=4096               # Docker-in-VM 需要更大空间
-TAG="1panel-rootfs:latest"
-OUTPUT="1panel-rootfs.ext4"
-```
-
-## CI Workflow 特殊步骤
-
-1. **Resolve latest release** — 调用 GitHub API 获取 1Panel 最新 release tag
-2. **Download Docker-capable kernel** — 从 `lu9944/firecracker` Release 下载自定义内核到 `/tmp/`
-3. **VM 测试使用 `--kernel`** — `vmsan create --kernel /tmp/vmlinux-6.1-docker --memory 2048`
-4. **检查三个 systemd 服务** — `1panel-core`, `containerd`, `docker` 全部要 active
-5. **VM 内 sudo docker** — `vmsan exec "$VM_ID" sudo docker info`
-
-## 关键文件位置
-
-| 文件 | 路径 |
-|------|------|
-| 配置脚本 | `/usr/local/bin/1pctl` |
-| Core 二进制 | `/usr/local/bin/1panel-core` |
-| Agent 二进制 | `/usr/local/bin/1panel-agent` |
-| 数据目录 | `/opt/1panel/` |
-| Systemd 服务 | `/etc/systemd/system/1panel-core.service` |
-| Systemd 服务 | `/etc/systemd/system/1panel-agent.service` |
+| curl HTTPS exit code 77 | `ubuntu:24.04` 基础镜像缺少 `ca-certificates` | apt install 加 `ca-certificates`，放在第一个 apt 层 |
+| docker-compose-plugin 不可用 | ubuntu:24.04 默认源没有这个包 | 用 `ADD` 指令从 GitHub Releases 下载二进制 |
+| `mkdir -p path/{a,b,c}` 静默失败 | Docker RUN 用 `/bin/sh` 不支持 bash brace expansion | 展开为独立的 `mkdir -p path/a path/b path/c` |
+| MySQL 容器 bind mount `/etc/localtime` 失败 | Docker-in-Firecracker overlay 不支持 bind mount 文件 | 用 `TZ` 环境变量替代，`sed` 删除 docker-compose 中的 mount 行 |
+| Dockerfile 内复杂脚本引号问题 | `printf` 内嵌 SQL、变量、引号极易出错 | 脚本放单独文件，通过 `post-extract.sh` 复制进 rootfs |

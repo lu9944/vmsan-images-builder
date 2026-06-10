@@ -27,9 +27,14 @@
 
 1. **Resolve latest 1Panel release** — `curl` GitHub API → python3 解析 `tag_name`
 2. **Download Docker-capable kernel** — 从 `lu9944/firecracker` Release 下载到 `/tmp/vmlinux-6.1-docker`
-3. **VM 测试使用自定义内核** — `vmsan create --kernel /tmp/vmlinux-6.1-docker --memory 2048`
-4. **验证三个 systemd 服务** — `systemctl is-active 1panel-core containerd docker`
-5. **VM 内用 sudo docker** — `vmsan exec "$VM_ID" sudo docker info`（exec 以 ubuntu 用户运行）
+3. **VM 测试使用自定义内核** — `vmsan create --kernel /tmp/vmlinux-6.1-docker --memory 4096`（嵌入 Docker 镜像需要更多内存）
+4. **Build 参数** — `--size 12288`（嵌入 Docker 镜像 tar 文件需要更大空间）
+5. **验证 systemd 服务** — `systemctl is-active 1panel-core containerd docker preinstall-containers register-apps`
+6. **验证预装应用** — `docker ps --filter "name=1Panel-mysql" --filter "name=1Panel-openresty"`
+7. **验证 docker compose** — `docker compose version`
+8. **VM 内用 sudo docker** — `vmsan exec "$VM_ID" sudo docker info`（exec 以 ubuntu 用户运行）
+9. **VM 测试超时** — `timeout-minutes: 15`（Docker 镜像 load + compose up 需要更长时间）
+10. **Release 说明** — 包含预装应用信息（MySQL/OpenResty 端口和凭据）
 
 ### VM Boot Test Gotchas
 
@@ -138,6 +143,36 @@ done
 ### CI 触发注意事项
 
 修改 `.github/workflows/build-*.yml` 本身会触发 CI（如果在 paths 列表中），但如果只改 workflow 文件而不改对应的 `images/**` 下的文件，某些 push 触发可能不会匹配。此时使用 `workflow_dispatch` 手动触发。
+
+### curl HTTPS 在 ubuntu:24.04 Dockerfile 中失败 (exit code 77)
+
+基础镜像缺少 `ca-certificates` 包，所有 HTTPS curl 请求都报错。
+
+**解决方案**：在 Dockerfile 第一个 `apt-get` 层中安装 `ca-certificates`。注意 `curl` 下载必须在安装 `ca-certificates` **之后**的 `RUN` 层中执行。
+
+### docker-compose-plugin apt 安装失败
+
+`docker-compose-plugin` 不在 ubuntu:24.04 默认 apt 源中。
+
+**解决方案**：用 Docker `ADD` 指令从 GitHub Releases 下载二进制：
+```dockerfile
+RUN mkdir -p /usr/local/lib/docker/cli-plugins
+ADD "https://github.com/docker/compose/releases/download/v2.36.1/docker-compose-linux-x86_64" /usr/local/lib/docker/cli-plugins/docker-compose
+RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+```
+不要用 `curl` 下载（CA cert 问题），也不要用 `RUN curl` 和 `ADD` 混在同一个 RUN 层。
+
+### brace expansion 在 Dockerfile 中静默失败
+
+`mkdir -p path/{conf,data,log}` 在 Docker RUN（`/bin/sh`）中不展开，创建名为 `{conf,data,log}` 的字面目录。
+
+**解决方案**：展开为独立路径 `mkdir -p path/conf path/data path/log`。
+
+### Docker-in-Firecracker bind mount /etc/localtime 失败
+
+MySQL/OpenResty 的 docker-compose.yml 包含 `/etc/localtime` bind mount，在 Firecracker overlay 中报错 "not a directory" 或 "file exists"。
+
+**解决方案**：用 `sed` 删除 docker-compose.yml 中的 `/etc/localtime` 和 `/etc/timezone` 挂载行，改用 `environment` 中的 `TZ: Asia/Shanghai`。
 
 ## CI 构建产物
 
