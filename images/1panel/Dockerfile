@@ -49,8 +49,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ncurses-base openssl procps tar unzip debianutils whois zstd \
     iproute2 iputils-tracepath netcat-openbsd \
     vim-tiny nano jq dnsutils tcpdump strace lsof less \
-    containerd docker.io docker-compose-plugin sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
+    containerd docker.io sqlite3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /usr/local/lib/docker/cli-plugins \
+    && curl -sfL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+         -o /usr/local/lib/docker/cli-plugins/docker-compose \
+    && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
     && mkdir -p /etc/sudoers.d \
