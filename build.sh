@@ -83,9 +83,10 @@ CONTAINER_NAME="${IMAGE_NAME}-export-$$"
 CLONE_DIR=""
 
 cleanup() {
-    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-    sudo rm -rf "$BUILD_DIR" 2>/dev/null || true
-    [ -n "$CLONE_DIR" ] && { sudo rm -rf "$CLONE_DIR" 2>/dev/null || true; }
+    set +e
+    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1
+    sudo rm -rf "$BUILD_DIR"
+    [ -n "$CLONE_DIR" ] && sudo rm -rf "$CLONE_DIR"
 }
 trap cleanup EXIT
 
@@ -147,3 +148,4 @@ info "Compressing: $COMPRESSED"
 gzip -k -9 "$OUTPUT"
 COMPRESSED_BYTES="$(stat -c %s "$COMPRESSED")"
 info "Compressed: $COMPRESSED ($(( COMPRESSED_BYTES / 1024 / 1024 ))MB, $(( COMPRESSED_BYTES * 100 / OUTPUT_BYTES ))% of original)"
+exit 0
