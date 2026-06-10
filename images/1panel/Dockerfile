@@ -44,7 +44,7 @@ ARG APPSTORE_BRANCH=dev
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     systemd systemd-sysv dbus sudo \
-    curl wget git \
+    ca-certificates curl wget git \
     bind9-utils bzip2 findutils gzip iptables iputils-ping \
     ncurses-base openssl procps tar unzip debianutils whois zstd \
     iproute2 iputils-tracepath netcat-openbsd \
