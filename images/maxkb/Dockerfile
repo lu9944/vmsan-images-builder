@@ -23,8 +23,6 @@ RUN id -u ubuntu >/dev/null 2>&1 || useradd -m -s /bin/bash ubuntu \
     && usermod -aG docker ubuntu \
     && chown -R ubuntu:ubuntu /home/ubuntu
 
-RUN mkdir -p /opt/maxkb/data /opt/maxkb/conf /opt/maxkb/logs \
-    /opt/maxkb/python-packages /opt/maxkb/local \
-    /opt/maxkb/cache
+RUN mkdir -p /opt/maxkb
 
 RUN rm -rf /tmp/*

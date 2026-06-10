@@ -9,14 +9,10 @@ on:
       - '.github/workflows/build-maxkb.yml'
   workflow_dispatch:
     inputs:
-      mkb_pro_url:
-        description: 'mkb-pro offline package URL (required)'
-        required: true
-        type: string
       image_size:
         description: 'Minimum image size in MB'
         required: false
-        default: '8192'
+        default: '2048'
 
 permissions:
   contents: write
@@ -28,13 +24,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Download mkb-pro offline package
-        run: |
-          mkdir -p docker-images
-          echo "Downloading mkb-pro from ${{ inputs.mkb_pro_url }} ..."
-          curl -fSL -o docker-images/mkb-pro.tar.gz "${{ inputs.mkb_pro_url }}"
-          ls -lh docker-images/mkb-pro.tar.gz
 
       - name: Install dependencies
         run: |
@@ -53,7 +42,7 @@ jobs:
           ./build.sh \
             --image maxkb \
             --source-dir /tmp/maxkb-source \
-            --size "${{ inputs.image_size || '8192' }}" \
+            --size "${{ inputs.image_size || '2048' }}" \
             --no-docker-cache
 
       - name: Install vmsan
@@ -66,7 +55,7 @@ jobs:
           ls -lh /tmp/vmlinux-6.1-docker
 
       - name: Test VM boot with vmsan
-        timeout-minutes: 20
+        timeout-minutes: 10
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -78,7 +67,7 @@ jobs:
           VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
             --rootfs "$IMAGE" \
             --kernel "$KERNEL" \
-            --memory 4096 \
+            --memory 2048 \
             --vcpus 2 \
             --publish-port 8080 \
             --json || true)
@@ -96,7 +85,7 @@ jobs:
           fi
 
           echo "=== Waiting for VM to boot ==="
-          for i in $(seq 1 36); do
+          for i in $(seq 1 24); do
             sleep 5
             if sudo env "PATH=$PATH" vmsan exec "$VM_ID" echo "ok" 2>/dev/null | grep -q "ok"; then
               STATUS="running"
@@ -117,21 +106,11 @@ jobs:
           sudo env "PATH=$PATH" vmsan exec "$VM_ID" echo "VM is alive"
 
           echo "=== Checking systemd services ==="
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active containerd docker install-maxkb
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active containerd docker
 
           echo "=== Checking Docker ==="
           sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker info 2>&1 | head -20 || echo "docker info failed"
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker-compose version 2>&1 || echo "docker-compose version failed"
           sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker compose version 2>&1 || echo "docker compose version failed"
-
-          echo "=== Checking install marker ==="
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" ls -la /opt/maxkb/.install-done 2>&1 || echo "install marker not found yet (may still be loading)"
-
-          echo "=== Checking containers ==="
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker ps 2>&1 || echo "docker ps failed"
-
-          echo "=== Checking mkctl ==="
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" mkctl version 2>&1 || echo "mkctl version failed"
 
           echo "=== Cleanup ==="
           sudo env "PATH=$PATH" vmsan stop "$VM_ID"
@@ -143,7 +122,7 @@ jobs:
         id: meta
         run: |
           TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-          BASENAME="maxkb-rootfs-v2.10.1-lts-${TIMESTAMP}"
+          BASENAME="maxkb-base-rootfs-${TIMESTAMP}"
           echo "basename=${BASENAME}" >> "$GITHUB_OUTPUT"
           echo "ext4=${BASENAME}.ext4" >> "$GITHUB_OUTPUT"
           echo "gz=${BASENAME}.ext4.gz" >> "$GITHUB_OUTPUT"
@@ -152,18 +131,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.basename }}
-          name: "MaxKB Pro rootfs ${{ steps.meta.outputs.basename }}"
+          name: "MaxKB base rootfs ${{ steps.meta.outputs.basename }}"
           body: |
-            Built from MaxKB Pro `v2.10.1-lts` offline installer
+            Base Docker rootfs (Ubuntu 24.04 + systemd + Docker)
             - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
             - **Kernel**: Docker-capable vmlinux-6.1.172 (TUN/MACVLAN/IPVS/netfilter/nf_tables)
-            - **Pre-installed**: MaxKB Pro + PostgreSQL + Redis (all in Docker)
-            - **Tools**: docker-compose standalone + docker compose plugin
-            - **Port**: 8080
-            - **mkctl**: `/usr/local/bin/mkctl` (start/stop/restart/status/reload)
-            - **PostgreSQL**: root / `Password123@postgres` (port 5432)
-            - **Redis**: `Password123@redis` (port 6379)
-            - **Memory**: requires >= 4096MB
+            - **Pre-installed**: Docker CE + compose plugin + dev tools
+            - **No application**: upload mkb-pro.tar.gz and install manually
 
             ### Usage
             ```bash
@@ -174,8 +148,8 @@ jobs:
             # Launch VM
             sudo env "PATH=$PATH" vmsan create \
               --kernel /tmp/vmlinux-6.1-docker \
-              --rootfs maxkb-rootfs.ext4 \
-              --memory 4096 \
+              --rootfs maxkb-base-rootfs.ext4 \
+              --memory 2048 \
               --vcpus 2 \
               --publish-port 8080
             ```
