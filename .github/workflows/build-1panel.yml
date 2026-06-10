@@ -118,13 +118,11 @@ jobs:
           sudo env "PATH=$PATH" vmsan exec "$VM_ID" echo "VM is alive"
 
           echo "=== Checking systemd services ==="
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active 1panel-core || echo "1panel-core: not active"
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active containerd || echo "containerd: not active"
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active docker || echo "docker: not active"
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" systemctl is-active 1panel-core containerd docker
 
           echo "=== Checking Docker ==="
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" docker info 2>&1 | head -20 || echo "docker info failed"
-          sudo env "PATH=$PATH" vmsan exec "$VM_ID" docker ps 2>&1 || echo "docker ps failed"
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker info 2>&1 | head -20 || echo "docker info failed"
+          sudo env "PATH=$PATH" vmsan exec "$VM_ID" sudo docker ps 2>&1 || echo "docker ps failed"
 
           echo "=== Cleanup ==="
           sudo env "PATH=$PATH" vmsan stop "$VM_ID"
