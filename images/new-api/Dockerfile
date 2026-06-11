@@ -3,28 +3,24 @@
 # =============================================================================
 FROM oven/bun:1 AS frontend-builder
 
-WORKDIR /build/web
-COPY web/package.json web/bun.lock ./
-COPY web/default/package.json ./default/package.json
-COPY web/classic/package.json ./classic/package.json
-RUN bun install --frozen-lockfile
-COPY ./web/default ./default
+WORKDIR /build
 COPY ./VERSION /build/VERSION
-RUN cd default && DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat /build/VERSION) bun run build
+COPY ./web/default/package.json ./web/default/bun.lock ./web/default/
+RUN cd web/default && bun install --frozen-lockfile
+COPY ./web/default ./web/default
+RUN cd web/default && DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat /build/VERSION) bun run build
 
 # =============================================================================
 # Stage 2: Build classic frontend (Bun)
 # =============================================================================
 FROM oven/bun:1 AS frontend-builder-classic
 
-WORKDIR /build/web
-COPY web/package.json web/bun.lock ./
-COPY web/default/package.json ./default/package.json
-COPY web/classic/package.json ./classic/package.json
-RUN bun install --frozen-lockfile
-COPY ./web/classic ./classic
+WORKDIR /build
 COPY ./VERSION /build/VERSION
-RUN cd classic && VITE_REACT_APP_VERSION=$(cat /build/VERSION) bun run build
+COPY ./web/classic/package.json ./web/classic/bun.lock ./web/classic/
+RUN cd web/classic && bun install --frozen-lockfile
+COPY ./web/classic ./web/classic
+RUN cd web/classic && VITE_REACT_APP_VERSION=$(cat /build/VERSION) bun run build
 
 # =============================================================================
 # Stage 3: Build Go backend
