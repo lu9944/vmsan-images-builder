@@ -1,0 +1,134 @@
+name: Build x-ui-yg rootfs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'images/x-ui-yg/**'
+      - 'build.sh'
+      - '.github/workflows/build-x-ui-yg.yml'
+  workflow_dispatch:
+    inputs:
+      image_size:
+        description: 'Minimum image size in MB'
+        required: false
+        default: '2048'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y e2fsprogs && break
+            echo "Retry $i: apt-get failed, retrying in 10s..."
+            sleep 10
+          done
+
+      - name: Build rootfs image
+        run: |
+          chmod +x build.sh
+          ./build.sh \
+            --image x-ui-yg \
+            --size "${{ github.event.inputs.image_size || '2048' }}" \
+            --no-docker-cache
+
+      - name: Install vmsan
+        run: curl -fsSL https://vmsan.dev/install | sudo bash
+
+      - name: Test VM boot with vmsan
+        timeout-minutes: 5
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          IMAGE="$(pwd)/x-ui-yg-rootfs.ext4"
+          echo "=== Booting VM from $IMAGE ($(du -sh "$IMAGE" | cut -f1)) ==="
+
+          VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
+            --rootfs "$IMAGE" \
+            --memory 512 \
+            --vcpus 1 \
+            --publish-port 54321 \
+            --json || true)
+
+          echo "=== vmsan create output ==="
+          echo "$VM_OUT"
+          echo "=== end output ==="
+
+          VM_ID=$(echo "$VM_OUT" | grep -oE '"vmId"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -oE '"[^"]*"$' | tr -d '"')
+          if [ -z "$VM_ID" ]; then
+            VM_ID=$(echo "$VM_OUT" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"')
+          fi
+          echo "VM ID: $VM_ID"
+
+          if [ -z "$VM_ID" ]; then
+            echo "ERROR: No VM ID returned from vmsan create"
+            exit 1
+          fi
+
+          echo "=== Waiting for VM to boot ==="
+          for i in $(seq 1 12); do
+            sleep 5
+            STATUS=$(vmsan list --json | python3 -c "
+          import json, sys
+          vms = json.load(sys.stdin)
+          vm = next((v for v in vms if v['id'] == '$VM_ID'), None)
+          print(vm['status'] if vm else 'not_found')
+          " || echo "parse_error")
+            echo "  attempt $i: status=$STATUS"
+            if [ "$STATUS" = "running" ]; then break; fi
+            if [ "$STATUS" = "error" ] || [ "$STATUS" = "stopped" ]; then
+              echo "ERROR: VM entered bad state: $STATUS"
+              sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
+              exit 1
+            fi
+          done
+
+          if [ "$STATUS" != "running" ]; then
+            echo "ERROR: VM did not reach running state (status=$STATUS)"
+            sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "=== Running command inside VM ==="
+          vmsan exec "$VM_ID" echo "VM is alive"
+
+          echo "=== Checking x-ui service ==="
+          sleep 10
+          vmsan exec "$VM_ID" systemctl is-active x-ui || true
+
+          echo "=== Cleanup ==="
+          sudo env "PATH=$PATH" vmsan stop "$VM_ID"
+          sudo env "PATH=$PATH" vmsan remove "$VM_ID"
+
+          echo "=== VM test passed ==="
+
+      - name: Generate filename
+        id: meta
+        run: |
+          TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+          BASENAME="x-ui-yg-rootfs-${TIMESTAMP}"
+          echo "basename=${BASENAME}" >> "$GITHUB_OUTPUT"
+          echo "gz=${BASENAME}.ext4.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release & Upload
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.basename }}
+          name: "x-ui-yg rootfs ${{ steps.meta.outputs.basename }}"
+          body: |
+            Built from [x-ui-yg](https://github.com/yonggekkk/x-ui-yg) latest release
+            - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
+            - **Web Panel**: port 54321, username `admin`, password `admin`
+          files: ./x-ui-yg-rootfs.ext4.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
