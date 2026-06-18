@@ -77,10 +77,11 @@ jobs:
           IMAGE="$(pwd)/hermes-rootfs.ext4"
           echo "=== Booting VM from $IMAGE ($(du -sh "$IMAGE" | cut -f1)) ==="
 
-          # hermes + full deps is heavier than qwenpaw; give it 2GB / 2 vcpus.
+          # hermes + full deps is heavier than qwenpaw; give it 4GB / 2 vcpus
+          # so first-boot skills sync + plugin discovery don't thrash.
           VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
             --rootfs "$IMAGE" \
-            --memory 2048 \
+            --memory 4096 \
             --vcpus 2 \
             --json || true)
 
@@ -122,26 +123,32 @@ jobs:
           echo "=== VM is alive ==="
 
           echo "=== Waiting for hermes dashboard service ==="
-          # systemd brings the service up after network.target; uvicorn import
-          # + first-boot skills sync can take a few seconds, so poll the port.
+          # systemd brings the service up after network.target; on first boot
+          # uvicorn import + bundled-skills sync + plugin/MCP discovery can take
+          # a while under memory pressure, so poll for the LISTEN socket (more
+          # reliable than curl-through-vmsan-exec) and give it generous time.
           DASH_OK=""
-          for i in $(seq 1 24); do
-            CODE=$(vmsan exec "$VM_ID" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/ 2>/dev/null || echo "000")
+          for i in $(seq 1 40); do
             SVC=$(vmsan exec "$VM_ID" systemctl is-active hermes 2>/dev/null || echo "unknown")
-            echo "  attempt $i: service=$SVC http=$CODE"
-            if [ "$CODE" = "200" ] || [ "$CODE" = "302" ]; then
+            if vmsan exec "$VM_ID" ss -tln 2>/dev/null | grep -q ":8088"; then
               DASH_OK=1
+              echo "  attempt $i: service=$SVC  8088 LISTEN"
               break
             fi
+            echo "  attempt $i: service=$SVC  8088 not listening yet"
             sleep 5
           done
 
           if [ -z "$DASH_OK" ]; then
-            echo "WARN: dashboard did not return 200/302 within timeout (service=$SVC http=$CODE)"
-            echo "--- journalctl (last 40 lines) ---"
-            vmsan exec "$VM_ID" sudo journalctl -u hermes --no-pager -n 40 2>/dev/null || true
+            echo "WARN: 8088 not listening within timeout (service=$SVC)"
+            echo "--- listening sockets ---"
+            vmsan exec "$VM_ID" ss -tlnp 2>/dev/null | head -20 || true
+            echo "--- journalctl (last 60 lines) ---"
+            vmsan exec "$VM_ID" sudo journalctl -u hermes --no-pager -n 60 2>&1 | tail -60 || true
           else
-            echo "=== Hermes dashboard is up on :8088 ==="
+            # Socket is up — confirm it actually serves the SPA.
+            CODE=$(vmsan exec "$VM_ID" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/ 2>/dev/null || echo "000")
+            echo "=== Hermes dashboard is up on :8088 (HTTP $CODE) ==="
           fi
 
           echo "=== Cleanup ==="
