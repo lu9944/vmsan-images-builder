@@ -126,7 +126,7 @@ jobs:
           # + first-boot skills sync can take a few seconds, so poll the port.
           DASH_OK=""
           for i in $(seq 1 24); do
-            CODE=$(vmsan exec "$VM_ID" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9119/ 2>/dev/null || echo "000")
+            CODE=$(vmsan exec "$VM_ID" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/ 2>/dev/null || echo "000")
             SVC=$(vmsan exec "$VM_ID" systemctl is-active hermes 2>/dev/null || echo "unknown")
             echo "  attempt $i: service=$SVC http=$CODE"
             if [ "$CODE" = "200" ] || [ "$CODE" = "302" ]; then
@@ -141,7 +141,7 @@ jobs:
             echo "--- journalctl (last 40 lines) ---"
             vmsan exec "$VM_ID" sudo journalctl -u hermes --no-pager -n 40 2>/dev/null || true
           else
-            echo "=== Hermes dashboard is up on :9119 ==="
+            echo "=== Hermes dashboard is up on :8088 ==="
           fi
 
           echo "=== Cleanup ==="
@@ -168,8 +168,8 @@ jobs:
           body: |
             Built from hermes-agent `${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}`
             - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
-            - **Web dashboard**: auto-starts on boot at `0.0.0.0:9119`
-            - Launch: `vmsan create --rootfs hermes-rootfs.ext4 --publish-port 9119`
+            - **Web dashboard**: auto-starts on boot at `0.0.0.0:8088`
+            - Launch: `vmsan create --rootfs hermes-rootfs.ext4 --publish-port 8088`
           files: ./hermes-rootfs.ext4.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -3,7 +3,7 @@
 #
 # Build context is the hermes-agent source tree (set by build.sh).
 # Produces an ubuntu:24.04 + systemd rootfs that auto-starts the hermes
-# web dashboard on boot (0.0.0.0:9119), matching the qwenpaw vmsan pattern.
+# web dashboard on boot (0.0.0.0:8088), matching the qwenpaw vmsan pattern.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -132,7 +132,7 @@ After=network.target\n\
 \n\
 [Service]\n\
 Type=simple\n\
-ExecStart=/opt/hermes/.venv/bin/hermes dashboard --host 0.0.0.0 --port 9119 --no-open --insecure --skip-build\n\
+ExecStart=/opt/hermes/.venv/bin/hermes dashboard --host 0.0.0.0 --port 8088 --no-open --insecure --skip-build\n\
 Restart=always\n\
 RestartSec=5\n\
 Environment=HOME=/home/ubuntu\n\
