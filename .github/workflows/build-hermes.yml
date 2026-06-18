@@ -88,7 +88,8 @@ jobs:
           echo "$VM_OUT"
           echo "=== end output ==="
 
-          VM_ID=$(echo "$VM_OUT" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"')
+          # vmsan 0.3.x emits "vmId" (not "id") in the create JSON.
+          VM_ID=$(echo "$VM_OUT" | grep -o '"vmId"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"')
           echo "VM ID: $VM_ID"
 
           if [ -z "$VM_ID" ]; then
@@ -96,33 +97,29 @@ jobs:
             exit 1
           fi
 
+          # Probe boot readiness via `vmsan exec` rather than `vmsan list`
+          # (its JSON field shape is unstable across vmsan versions — see
+          # reference/ci-cd-workflows.md). exec only succeeds once the guest
+          # agent is up, which is what we actually care about.
           echo "=== Waiting for VM to boot ==="
-          STATUS=""
+          BOOTED=""
           for i in $(seq 1 24); do
             sleep 5
-            STATUS=$(vmsan list --json | python3 -c "
-          import json, sys
-          vms = json.load(sys.stdin)
-          vm = next((v for v in vms if v['id'] == '$VM_ID'), None)
-          print(vm['status'] if vm else 'not_found')
-          " || echo "parse_error")
-            echo "  attempt $i: status=$STATUS"
-            if [ "$STATUS" = "running" ]; then break; fi
-            if [ "$STATUS" = "error" ] || [ "$STATUS" = "stopped" ]; then
-              echo "ERROR: VM entered bad state: $STATUS"
-              sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
-              exit 1
+            if vmsan exec "$VM_ID" echo "VM is alive" >/dev/null 2>&1; then
+              BOOTED=1
+              echo "  attempt $i: VM responding to exec"
+              break
             fi
+            echo "  attempt $i: not ready yet"
           done
 
-          if [ "$STATUS" != "running" ]; then
-            echo "ERROR: VM did not reach running state (status=$STATUS)"
+          if [ -z "$BOOTED" ]; then
+            echo "ERROR: VM never responded to exec within timeout"
             sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
             exit 1
           fi
 
           echo "=== VM is alive ==="
-          vmsan exec "$VM_ID" echo "VM is alive"
 
           echo "=== Waiting for hermes dashboard service ==="
           # systemd brings the service up after network.target; uvicorn import
