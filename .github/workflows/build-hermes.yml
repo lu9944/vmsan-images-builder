@@ -1,0 +1,178 @@
+name: Build hermes rootfs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'images/hermes/**'
+      - 'build.sh'
+      - '.github/workflows/build-hermes.yml'
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'hermes-agent git ref (branch/tag/commit). Leave empty to use latest release.'
+        required: false
+        default: ''
+      image_size:
+        description: 'Minimum image size in MB'
+        required: false
+        default: '4096'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # hermes + [all] deps + node produce a multi-GB rootfs; free up the
+      # ~14GB GitHub runner disk before building/exporting/compressing.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /opt/hostedtoolcache /usr/local/.ghcup
+          sudo apt-get clean
+          echo "=== disk usage ==="
+          df -h /
+
+      - name: Resolve latest hermes-agent release tag
+        id: resolve_ref
+        if: github.event.inputs.source_ref == ''
+        run: |
+          LATEST_TAG=$(curl -sf "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest" | python3 -c "import json,sys;print(json.load(sys.stdin)['tag_name'])")
+          echo "ref=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved latest release: $LATEST_TAG"
+
+      - name: Install dependencies
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y e2fsprogs && break
+            echo "Retry $i: apt-get failed, retrying in 10s..."
+            sleep 10
+          done
+
+      - name: Build rootfs image
+        run: |
+          chmod +x build.sh
+          ./build.sh \
+            --image hermes \
+            --size "${{ github.event.inputs.image_size || '4096' }}" \
+            --no-docker-cache
+        env:
+          SOURCE_REF: ${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}
+
+      - name: Install vmsan
+        run: curl -fsSL https://vmsan.dev/install | sudo bash
+
+      - name: Test VM boot with vmsan
+        timeout-minutes: 10
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          IMAGE="$(pwd)/hermes-rootfs.ext4"
+          echo "=== Booting VM from $IMAGE ($(du -sh "$IMAGE" | cut -f1)) ==="
+
+          # hermes + full deps is heavier than qwenpaw; give it 2GB / 2 vcpus.
+          VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
+            --rootfs "$IMAGE" \
+            --memory 2048 \
+            --vcpus 2 \
+            --json || true)
+
+          echo "=== vmsan create output ==="
+          echo "$VM_OUT"
+          echo "=== end output ==="
+
+          VM_ID=$(echo "$VM_OUT" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"')
+          echo "VM ID: $VM_ID"
+
+          if [ -z "$VM_ID" ]; then
+            echo "ERROR: No VM ID returned from vmsan create"
+            exit 1
+          fi
+
+          echo "=== Waiting for VM to boot ==="
+          STATUS=""
+          for i in $(seq 1 24); do
+            sleep 5
+            STATUS=$(vmsan list --json | python3 -c "
+          import json, sys
+          vms = json.load(sys.stdin)
+          vm = next((v for v in vms if v['id'] == '$VM_ID'), None)
+          print(vm['status'] if vm else 'not_found')
+          " || echo "parse_error")
+            echo "  attempt $i: status=$STATUS"
+            if [ "$STATUS" = "running" ]; then break; fi
+            if [ "$STATUS" = "error" ] || [ "$STATUS" = "stopped" ]; then
+              echo "ERROR: VM entered bad state: $STATUS"
+              sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
+              exit 1
+            fi
+          done
+
+          if [ "$STATUS" != "running" ]; then
+            echo "ERROR: VM did not reach running state (status=$STATUS)"
+            sudo env "PATH=$PATH" vmsan remove --force "$VM_ID" 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "=== VM is alive ==="
+          vmsan exec "$VM_ID" echo "VM is alive"
+
+          echo "=== Waiting for hermes dashboard service ==="
+          # systemd brings the service up after network.target; uvicorn import
+          # + first-boot skills sync can take a few seconds, so poll the port.
+          DASH_OK=""
+          for i in $(seq 1 24); do
+            CODE=$(vmsan exec "$VM_ID" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9119/ 2>/dev/null || echo "000")
+            SVC=$(vmsan exec "$VM_ID" systemctl is-active hermes 2>/dev/null || echo "unknown")
+            echo "  attempt $i: service=$SVC http=$CODE"
+            if [ "$CODE" = "200" ] || [ "$CODE" = "302" ]; then
+              DASH_OK=1
+              break
+            fi
+            sleep 5
+          done
+
+          if [ -z "$DASH_OK" ]; then
+            echo "WARN: dashboard did not return 200/302 within timeout (service=$SVC http=$CODE)"
+            echo "--- journalctl (last 40 lines) ---"
+            vmsan exec "$VM_ID" sudo journalctl -u hermes --no-pager -n 40 2>/dev/null || true
+          else
+            echo "=== Hermes dashboard is up on :9119 ==="
+          fi
+
+          echo "=== Cleanup ==="
+          sudo env "PATH=$PATH" vmsan stop "$VM_ID"
+          sudo env "PATH=$PATH" vmsan remove "$VM_ID"
+
+          echo "=== VM test passed ==="
+
+      - name: Generate filename
+        id: meta
+        run: |
+          TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+          REF="${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}"
+          BASENAME="hermes-rootfs-${REF}-${TIMESTAMP}"
+          echo "basename=${BASENAME}" >> "$GITHUB_OUTPUT"
+          echo "ext4=${BASENAME}.ext4" >> "$GITHUB_OUTPUT"
+          echo "gz=${BASENAME}.ext4.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release & Upload
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.basename }}
+          name: "Hermes Agent rootfs ${{ steps.meta.outputs.basename }}"
+          body: |
+            Built from hermes-agent `${{ github.event.inputs.source_ref || steps.resolve_ref.outputs.ref }}`
+            - **Compressed**: `${{ steps.meta.outputs.gz }}` (gzip)
+            - **Web dashboard**: auto-starts on boot at `0.0.0.0:9119`
+            - Launch: `vmsan create --rootfs hermes-rootfs.ext4 --publish-port 9119`
+          files: ./hermes-rootfs.ext4.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
