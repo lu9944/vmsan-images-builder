@@ -14,16 +14,19 @@ RUN npm run build
 # =============================================================================
 # Stage 2: Go Builder + Xray/geoip downloader
 # Compiles the 3x-ui binary (CGO) and fetches Xray-core, mtg-multi, geo data.
+# Uses Debian-based (not Alpine) Go image so CGO links against glibc, matching
+# the Ubuntu runtime. Alpine's musl libc binary would fail on Ubuntu runtime.
 # =============================================================================
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26 AS builder
 WORKDIR /app
 ARG TARGETARCH
 
-RUN apk --no-cache --update add \
-  build-base \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  build-essential \
   gcc \
   curl \
-  unzip
+  unzip \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 COPY --from=frontend /src/internal/web/dist ./internal/web/dist
