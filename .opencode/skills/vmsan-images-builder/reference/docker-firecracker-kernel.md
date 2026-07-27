@@ -68,13 +68,24 @@ Firecracker 官方内核配置（`microvm-kernel-ci-x86_64-6.1.config`，3556 �
 
 **注意**：下载到 `/tmp/` 而非 `~/.vmsan/kernels/`（后者被 root 拥有，runner 用户无写入权限）。
 
+## vmsan install.sh 内核集成
+
+vmsan 的 `install.sh` 中 x86_64 平台已修改为使用 Docker 兼容内核（`lu9944/firecracker` Release）。
+
+**修改位置**：`install.sh` 的 `downloadKernel()` 函数，x86_64 分支改为从 `lu9944/firecracker` 下载 `vmlinux-6.1.172-docker`。
+
+**内核自动选择机制**：vmsan 的 `findKernel()` 按 `~/.vmsan/kernels/vmlinux*` 字母序取最后一个。`vmlinux-6.1.172-docker` > `vmlinux-6.1`（标准内核），会自动被选中，无需额外配置。
+
+**aarch64 平台**保持使用标准 Firecracker 内核不变。
+
 ## 验证 Docker 运行
 
 VM 内需验证：
 ```bash
-systemctl is-active 1panel-core containerd docker  # 三个服务都要 active
-sudo docker info                                    # 确认 Server 端运行
-sudo docker ps                                      # 确认可列出容器
+systemctl is-active containerd docker  # Docker 服务 active
+sudo docker info                        # 确认 Server 端运行
+sudo docker ps                          # 确认可列出容器
+sudo docker compose version             # 确认 compose 插件可用
 ```
 
 `vmsan exec` 以 ubuntu 用户运行，必须加 `sudo` 才能访问 docker.sock。

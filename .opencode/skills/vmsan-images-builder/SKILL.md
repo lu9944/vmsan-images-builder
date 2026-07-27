@@ -1,25 +1,35 @@
 ---
 name: vmsan-image-builder
-description: Build vmsan-compatible ext4 rootfs images from Docker containers. Use when: packaging applications for Firecracker microVMs, creating systemd-based VM images, adding new image types, CI/CD pipeline tasks, Docker-in-Firecracker kernel work, pre-installing apps with embedded Docker images.
+description: Build vmsan-compatible ext4 rootfs images from Docker containers. Use when: packaging applications for Firecracker microVMs, creating systemd-based VM images, adding new image types, CI/CD pipeline tasks, Docker-in-Firecracker kernel work, base Docker VM images, embedding offline installers.
 ---
 
 ## Core Patterns
 
 **Multi-Image Architecture**: Each image lives in `images/<name>/` with `config.sh` (SOURCE_REPO, SOURCE_REF, IMAGE_SIZE, TAG), `Dockerfile`, and optional `post-extract.sh`. `build.sh --image <name>` discovers and builds from that directory. Adding a new image = create `images/<name>/` + `.github/workflows/build-<name>.yml`.
 
-**Docker Build Context Gotcha**: Dockerfile is at `images/<name>/Dockerfile`, but build context is the application source directory (cloned by `build.sh`). COPY paths in Dockerfile are relative to the source context, not the Dockerfile directory.
+**Base-Only Image Pattern**: For images that just need Docker + tools without application source, set `SOURCE_REPO=""` in config.sh and pass `--source-dir /tmp/empty` (an empty directory). No git clone happens. Dockerfile is a single-stage runtime. Example: `images/maxkb/`.
+
+**Docker Build Context Gotcha**: Dockerfile is at `images/<name>/Dockerfile`, but build context is the application source directory (cloned by `build.sh`). COPY paths in Dockerfile are relative to the source context, not the Dockerfile directory. For base-only images, the context is empty — no COPY allowed.
 
 **Multi-stage Docker Build**: Typical pattern — Stage 1 builds frontend (node:20-slim), Stage 2 optionally builds backend binaries (golang), Stage 3 is runtime (ubuntu:24.04 + systemd). vmsan-agent requires systemd.
 
-**ext4 Image Size**: `tar_bytes / 1024 / 1024 + 512` MB, minimum 1024MB. `--size` flag sets minimum, not exact size. Docker-in-VM images need 4096MB+; images with embedded Docker image tars need 12288MB+.
+**ext4 Image Size**: `tar_bytes / 1024 / 1024 + 512` MB, minimum 1024MB. `--size` flag sets minimum, not exact size. Base Docker images need 2048MB; Docker-in-VM images with embedded tars need 4096MB+; full app images (1Panel) need 12288MB+.
 
 **Systemd Service Pattern**: Service file at `/etc/systemd/system/<app>.service`, enabled via symlink in `multi-user.target.wants/`. Type=simple, Restart=always, After=network.target. **Must install `dbus` package** — without it `systemctl` fails with "Failed to connect to bus: No such file or directory".
 
-**Pre-installed Docker Apps Pattern**: Embed Docker images into rootfs for offline use:
+**Pre-installed Docker Apps Pattern** (1Panel-style): Embed Docker images into rootfs for offline use:
 1. `post-extract.sh` runs `docker pull` + `docker save` on host to create tar files in `$ROOTFS/opt/.../cache/`
 2. `preinstall-containers.service` (After=docker, Before=app-core) runs `docker load` + `docker compose up -d`
 3. `register-apps.sh` (After=app-core) inserts records into app's SQLite database
 4. Marker files (`/opt/.../.preinstall-containers-done`, `.register-apps-done`) ensure idempotency
+
+**`set -a` + `envsubst` Gotcha**: When using `envsubst` to generate config from template files, variables loaded via `source` must be exported. Always use `set -a` before `source` to auto-export. Without this, `envsubst` silently replaces `${VAR}` with empty strings, causing cascading failures (empty DB passwords, missing config).
+
+**`gettext-base` Required**: ubuntu:24.04 does not include `envsubst` by default. If any script in the VM uses `envsubst` for config generation, install `gettext-base` in the Dockerfile.
+
+**build.sh Cleanup Trap Fix**: The `trap cleanup EXIT` function must use `set +e` at the top to prevent cleanup failures from overwriting the script's exit code. Also add explicit `exit 0` at script end after successful gzip.
+
+**build.sh Disk Space in CI**: GitHub Actions runners have ~14GB disk. Before gzip compression, remove intermediate files (`rootfs/` directory, `rootfs.tar`) to free space. Without this, 8GB+ images fail with "No space left on device".
 
 **ubuntu:24.04 Dockerfile Gotchas**:
 - **ca-certificates**: Base image lacks this package — all `curl` HTTPS calls fail with exit code 77. Install it in the first `apt-get` layer.
@@ -38,7 +48,7 @@ description: Build vmsan-compatible ext4 rootfs images from Docker containers. U
 
 **GitHub Actions KVM Support**: GitHub-hosted `ubuntu-latest` runners have KVM (AMD svm, kvm_amd, ~16GB RAM). Runner user NOT in kvm group; `sudo usermod -aG kvm runner` has no effect in same shell. Use `sudo` for all KVM/vmsan operations.
 
-**Docker-in-Firecracker**: Official Firecracker kernel has most Docker features (cgroups, overlayfs, bridge, veth, namespaces, seccomp) but **missing**: TUN, DUMMY, MACVLAN, IPVLAN, VXLAN, IPVS, several NETFILTER_XT_* targets. Monolithic kernel (`CONFIG_MODULES=n`). Custom kernel as overlay config on official `microvm-kernel-ci-x86_64-6.1.config`.
+**Docker-in-Firecracker**: Official Firecracker kernel has most Docker features (cgroups, overlayfs, bridge, veth, namespaces, seccomp) but **missing**: TUN, DUMMY, MACVLAN, IPVLAN, VXLAN, IPVS, several NETFILTER_XT_* targets. Monolithic kernel (`CONFIG_MODULES=n`). Custom kernel from `lu9944/firecracker` (`docker.config` overlay) covers all 45 required items.
 
 ## Reference Files
 
@@ -47,13 +57,19 @@ description: Build vmsan-compatible ext4 rootfs images from Docker containers. U
 | `reference/ci-cd-workflows.md` | GitHub Actions workflows: build pipeline, KVM test, VM boot test, CI failures & fixes, vmsan API patterns | Working with CI/CD pipelines, adding new image workflows, debugging Actions |
 | `reference/qwenpaw-patching.md` | Active Dockerfile patches for QwenPaw: `_MAX_ZIP_BYTES` sed, python-multipart, env var upload limit, default config | Modifying Dockerfile patches, debugging upload size issues |
 | `reference/1panel-build.md` | 1Panel image build: 3-stage Dockerfile, Go+Node build, config from 1pctl script, Docker-in-VM, pre-installed apps, all gotchas | Building/modifying 1Panel image, adding pre-installed apps, embedding Docker images |
-| `reference/docker-firecracker-kernel.md` | Docker-in-Firecracker kernel requirements, missing config items, custom kernel build process | Enabling Docker in Firecracker VMs, kernel compilation, adding kernel modules |
+| `reference/maxkb-build.md` | MaxKB base image: base-only pattern, mkb-pro offline installer structure, `set -a`+envsubst gotcha, Dockerfile with gettext-base | Building MaxKB base image, understanding mkb-pro offline installer, envsubst issues |
+| `reference/docker-firecracker-kernel.md` | Docker-in-Firecracker kernel requirements, missing config items, custom kernel build process, vmsan kernel integration | Enabling Docker in Firecracker VMs, kernel compilation, vmsan install.sh kernel setup |
 
 ## Key Workflows
 
 **Build rootfs image locally**
 ```bash
+# With source code
 ./build.sh --image <name> [--source-dir ../app] [--output ./rootfs.ext4] [--size 2048] [--no-docker-cache]
+
+# Base-only image (no source code)
+mkdir -p /tmp/empty-source
+./build.sh --image maxkb --source-dir /tmp/empty-source --size 2048
 ```
 
 **Verify image offline** (requires sudo)
@@ -68,17 +84,18 @@ sudo env "PATH=$PATH" vmsan create --rootfs ./rootfs.ext4 --vcpus 2 --memory 102
 sudo env "PATH=$PATH" vmsan create --kernel /tmp/vmlinux-6.1-docker --rootfs ./rootfs.ext4 --memory 2048
 ```
 
-**Add a new image type**: Create `images/<name>/config.sh` + `images/<name>/Dockerfile` + `.github/workflows/build-<name>.yml`. Follow existing pattern (e.g., `images/1panel/`).
+**Add a new image type**: Create `images/<name>/config.sh` + `images/<name>/Dockerfile` + `.github/workflows/build-<name>.yml`. Follow existing pattern (e.g., `images/1panel/` for full app, `images/maxkb/` for base-only).
 
 ## Dependencies
 
 - Docker
 - `mkfs.ext4`, `tune2fs` (e2fsprogs)
 - vmsan CLI: `curl -fsSL https://vmsan.dev/install | bash`
-- Application source code (cloned from `SOURCE_REPO` in `config.sh`)
+- Application source code (cloned from `SOURCE_REPO` in `config.sh`; not needed for base-only images)
 
 ## Cleanup on Error
 
 - Uses `trap cleanup EXIT` for guaranteed cleanup
+- Cleanup function uses `set +e` to prevent overwriting exit codes
 - Removes container and build directories even on failure
 - Scripts use `set -euo pipefail` for strict error handling

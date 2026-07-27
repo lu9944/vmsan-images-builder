@@ -6,6 +6,7 @@
 |------|---------|---------|
 | `build-qwenpaw.yml` | push(paths), workflow_dispatch | Build QwenPaw rootfs, test VM boot, publish GitHub Release |
 | `build-1panel.yml` | push(paths), workflow_dispatch | Build 1Panel rootfs + Docker kernel, test Docker-in-VM, publish Release |
+| `build-maxkb.yml` | push(paths), workflow_dispatch | Build MaxKB base rootfs (Docker only, no app), test Docker-in-VM, publish Release |
 | `build-code-server.yml` | similar pattern | Build code-server rootfs |
 | `build-openchamber.yml` | similar pattern | Build OpenChamber rootfs |
 | `test-kvm.yml` | workflow_dispatch | Test runner KVM support |
@@ -139,6 +140,39 @@ done
   continue-on-error: true
   timeout-minutes: 5
 ```
+
+### MaxKB Workflow (build-maxkb.yml)
+
+Base-only 镜像，不嵌入应用程序：
+
+1. **Prepare dummy source directory** — `mkdir -p /tmp/maxkb-source`（空目录，不需要源码）
+2. **Build rootfs** — `./build.sh --image maxkb --source-dir /tmp/maxkb-source --size 2048`
+3. **Install vmsan** + **Download Docker kernel**（同 1Panel）
+4. **Test VM boot** — 测试 Docker + compose 可用（2048MB 内存）
+5. **Release** — 文件名格式 `maxkb-base-rootfs-{timestamp}`，说明中注明需手动安装 mkb-pro
+
+**与 1Panel workflow 的区别**：
+- 无 `source_ref` 解析（没有上游源码仓库）
+- 无预装应用验证（无 preinstall-containers、register-apps 步骤）
+- IMAGE_SIZE=2048（vs 1Panel 的 12288）
+- VM 内存 2048MB（vs 1Panel 的 4096MB）
+- `workflow_dispatch` 只有 `image_size` 输入参数
+
+### CI 磁盘空间不足
+
+GitHub Actions runner ~14GB 磁盘，构建大镜像（8GB+）时 gzip 压缩阶段可能耗尽空间。
+
+**解决方案**：在 `build.sh` 中 gzip 之前清理中间文件：
+```bash
+sudo rm -rf "$BUILD_DIR/rootfs" "$BUILD_DIR/rootfs.tar"
+docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+```
+
+### cleanup trap 覆盖退出码
+
+`trap cleanup EXIT` 中如果 cleanup 函数有命令失败（`set -e` 下），失败命令会覆盖脚本的退出码，导致构建成功但 CI 步骤报错。
+
+**解决方案**：cleanup 函数开头加 `set +e`，脚本末尾显式 `exit 0`。
 
 ### CI 触发注意事项
 
