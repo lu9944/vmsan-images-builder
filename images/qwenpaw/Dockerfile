@@ -20,7 +20,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # System packages: systemd (required by vmsan) + Python build deps + dev tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    systemd systemd-sysv sudo \
+    systemd systemd-sysv sudo dbus \
     python3 python3-pip python3-venv \
     build-essential libssl-dev git \
     bind9-utils bzip2 findutils gzip iptables iputils-ping \

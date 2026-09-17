@@ -132,12 +132,18 @@ jobs:
 
           if [ -z "$DASH_OK" ]; then
             echo "WARN: 8088 not listening within timeout (service=$SVC)"
-            echo "--- listening sockets ---"
-            vmsan exec "$VM_ID" ss -tlnp 2>/dev/null | head -20 || true
-            echo "--- qwenpaw.service status ---"
-            vmsan exec "$VM_ID" systemctl status qwenpaw --no-pager -l 2>&1 | head -20 || true
-            echo "--- journalctl (last 60 lines) ---"
-            vmsan exec "$VM_ID" sudo journalctl -u qwenpaw --no-pager -n 60 2>&1 | tail -60 || true
+            echo "--- listening sockets (single-arg form) ---"
+            vmsan exec "$VM_ID" "sudo ss -tlnp" || true
+            echo "--- listening sockets (multi-arg form) ---"
+            vmsan exec "$VM_ID" sudo ss -tlnp || true
+            echo "--- PID 1 and processes ---"
+            vmsan exec "$VM_ID" "ps -ef | head -40" || true
+            echo "--- qwenpaw.service status (root) ---"
+            vmsan exec "$VM_ID" sudo systemctl status qwenpaw --no-pager -l || true
+            echo "--- journalctl (last 80 lines) ---"
+            vmsan exec "$VM_ID" "sudo journalctl -u qwenpaw --no-pager -n 80" || true
+            echo "--- OOM check ---"
+            vmsan exec "$VM_ID" "sudo dmesg | grep -iE 'oom|killed process' | tail -10" || true
           else
             CODE=$(vmsan exec "$VM_ID" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/ 2>/dev/null || echo "000")
             echo "=== QwenPaw console is up on :8088 (HTTP $CODE) ==="
