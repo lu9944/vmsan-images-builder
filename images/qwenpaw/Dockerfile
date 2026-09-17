@@ -57,6 +57,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /build
 COPY pyproject.toml setup.py README.md ./
 COPY src ./src
+COPY packages ./packages
 COPY --from=console-builder /app/dist ./src/qwenpaw/console/
 
 # Patch: raise skill zip uncompressed size limit from 200 MB to 1 GB

@@ -72,7 +72,7 @@ jobs:
           # vmsan create may output non-JSON progress to stderr; --json goes to stdout
           VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
             --rootfs "$IMAGE" \
-            --memory 512 \
+            --memory 1024 \
             --vcpus 1 \
             --json || true)
 
