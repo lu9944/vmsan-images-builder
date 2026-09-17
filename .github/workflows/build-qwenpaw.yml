@@ -61,7 +61,7 @@ jobs:
         run: curl -fsSL https://vmsan.dev/install | sudo bash
 
       - name: Test VM boot with vmsan
-        timeout-minutes: 5
+        timeout-minutes: 10
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -118,18 +118,29 @@ jobs:
           # + bundled-skills sync can take a while on 2.x, so poll for the
           # LISTEN socket (more reliable than curl-through-vmsan-exec).
           DASH_OK=""
-          for i in $(seq 1 24); do
-            sleep 5
+          SVC="unknown"
+          for i in $(seq 1 40); do
+            SVC=$(vmsan exec "$VM_ID" systemctl is-active qwenpaw 2>/dev/null || echo "unknown")
             if vmsan exec "$VM_ID" ss -tln 2>/dev/null | grep -q ":8088"; then
               DASH_OK=1
-              echo "  attempt $i: port 8088 LISTENING"
+              echo "  attempt $i: service=$SVC  8088 LISTEN"
               break
             fi
-            echo "  attempt $i: port 8088 not up yet"
+            echo "  attempt $i: service=$SVC  8088 not listening yet"
+            sleep 5
           done
 
           if [ -z "$DASH_OK" ]; then
-            echo "WARNING: qwenpaw port 8088 not listening within timeout"
+            echo "WARN: 8088 not listening within timeout (service=$SVC)"
+            echo "--- listening sockets ---"
+            vmsan exec "$VM_ID" ss -tlnp 2>/dev/null | head -20 || true
+            echo "--- qwenpaw.service status ---"
+            vmsan exec "$VM_ID" systemctl status qwenpaw --no-pager -l 2>&1 | head -20 || true
+            echo "--- journalctl (last 60 lines) ---"
+            vmsan exec "$VM_ID" sudo journalctl -u qwenpaw --no-pager -n 60 2>&1 | tail -60 || true
+          else
+            CODE=$(vmsan exec "$VM_ID" curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/ 2>/dev/null || echo "000")
+            echo "=== QwenPaw console is up on :8088 (HTTP $CODE) ==="
           fi
 
           echo "=== Cleanup ==="
