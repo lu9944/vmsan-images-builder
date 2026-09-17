@@ -72,8 +72,8 @@ jobs:
           # vmsan create may output non-JSON progress to stderr; --json goes to stdout
           VM_OUT=$(sudo env "PATH=$PATH" vmsan create \
             --rootfs "$IMAGE" \
-            --memory 1024 \
-            --vcpus 1 \
+            --memory 4096 \
+            --vcpus 2 \
             --json || true)
 
           echo "=== vmsan create output ==="
